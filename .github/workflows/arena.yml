@@ -1,0 +1,63 @@
+name: Strategy City
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes, 24/7
+  workflow_dispatch:          # "Run workflow" button
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: strategy-city
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load saved season history
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: arena-data
+          path: state
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -q -r requirements.txt
+
+      - name: Run the arena
+        run: python run_arena.py state site
+
+      - name: Save season history
+        run: |
+          mkdir -p state && cd state
+          [ -d .git ] || git init -q
+          git checkout -q -B arena-data
+          git remote remove origin 2>/dev/null || true
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git config user.name "arena-bot"
+          git config user.email "arena-bot@users.noreply.github.com"
+          git add -A
+          git commit -q --amend -m "Arena history" || git commit -q -m "Arena history"
+          git push -q -f origin HEAD:arena-data
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
