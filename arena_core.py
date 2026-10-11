@@ -49,6 +49,35 @@ def prepare(raw, market="rth"):
     return df
 
 
+def roll_adjust(fut, ref, threshold=0.0025):
+    """Futures roll guard. Yahoo's continuous contract (NQ=F) jumps when it switches to the next quarterly
+    contract, which would create fake profits and losses. We compare every bar's move with QQQ (same index):
+    in roll months (Mar/Jun/Sep/Dec, first 3 weeks), a move that QQQ doesn't share is the roll gap, and all
+    earlier prices are shifted by it (back-adjusted), like professional charting platforms do."""
+    q = ref["close"].reindex(fut.index)
+    rn = fut["close"] / fut["close"].shift() - 1
+    rq = q / q.shift() - 1
+    idx = fut.index
+    window = np.isin(idx.month, [3, 6, 9, 12]) & (idx.day <= 22)
+    jumps = np.where(((rn - rq).abs() > threshold).values & window & rq.notna().values)[0]
+    if len(jumps) == 0:
+        return fut, []
+    fut = fut.copy()
+    cols = ["open", "high", "low", "close"]
+    shifts = np.zeros(len(fut))
+    log = []
+    c = fut["close"].values
+    for i in jumps:
+        if i == 0:
+            continue
+        gap = c[i] - c[i - 1] * (1 + rq.values[i])
+        shifts[:i] += gap
+        log.append((idx[i], round(float(gap), 2)))
+    for col in cols:
+        fut[col] = fut[col].values + shifts
+    return fut, log
+
+
 def drop_unfinished(df, now=None):
     """Remove the bar that is still forming, so decisions never change after the fact."""
     now = now or pd.Timestamp.now(tz=NY)

@@ -14,8 +14,10 @@ CLASS = {"Breakout": "Striker", "Reversal": "Counter", "Trend": "Rider", "Moment
 
 
 class Cfg:
-    def __init__(self, start, ko_per_day=3, qual_sessions=40, week_len=5, min_qual_sessions=15):
+    def __init__(self, start, ko_per_day=3, qual_sessions=40, week_len=5, min_qual_sessions=15, grace=3, revive=None):
         self.start = pd.Timestamp(start).date()
+        self.grace = grace  # sessions a fighter must have fought before it can be knocked out
+        self.revive = {n: pd.Timestamp(d).date() for n, d in (revive or {}).items()}  # second chances
         self.ko_per_day, self.qual_sessions, self.week_len = ko_per_day, qual_sessions, week_len
         self.min_qual_sessions = min_qual_sessions
 
@@ -23,7 +25,7 @@ class Cfg:
 class Arena:
     """One league: its assets, fighters, challenger pool, benchmark ("the Boss"), sizing and rules."""
     def __init__(self, key, title, icon, dfs, master, roster, pool, bench, cfg, sizing, market="rth",
-                 crown_needs_qual=True, unit_label="", extra=None, pool_needs_qual=True):
+                 crown_needs_qual=True, unit_label="", extra=None, pool_needs_qual=True, risk_limit=1000.0, monkeys=None):
         self.key, self.title, self.icon = key, title, icon
         self.dfs, self.master = dfs, master
         self.roster, self.pool, self.bench = roster, pool, bench
@@ -31,6 +33,8 @@ class Arena:
         self.crown_needs_qual, self.unit_label = crown_needs_qual, unit_label
         self.extra = extra or {}
         self.pool_needs_qual = pool_needs_qual
+        self.risk_limit = risk_limit
+        self.monkeys = monkeys or []
 
 
 def _f(x, nd=2):
@@ -92,6 +96,7 @@ def run_season(A, now=None):
     C._ROWS.clear()
     bt = {n: run_fighter(A, s, cross) for n, s in strats.items()}
     eq = {n: t.attrs["equity"] for n, t in bt.items()}
+    monkey_eq = [run_fighter(A, mk, {}).attrs["equity"] for mk in A.monkeys]
 
     m = A.master
     dates = np.array(m["date"].values)
@@ -142,7 +147,18 @@ def run_season(A, now=None):
         nxt = nxt[0] if nxt else None
         act = [mm for mm in members.values() if mm["status"] == "active" and mm["joined"] is not None and mm["joined"] <= d]
         pnl = {mm["name"]: eq_end(mm["name"], d) - mm["base"] for mm in act}
-        cands = [mm for mm in act if pnl[mm["name"]] <= 0 and not (mm["origin"] == "challenger" and mm["joined"] == d)]
+
+        def last3(mm):
+            fought = [x for x in sessions if mm["joined"] <= x <= d]
+            return eq_end(mm["name"], d) - (eq_end(mm["name"], fought[-4]) if len(fought) >= 4 else mm["base"]), len(fought)
+
+        # fair knockouts: only fighters that are losing overall AND over their last 3 sessions,
+        # and that have fought at least `grace` sessions, can be knocked out
+        cands = []
+        for mm in act:
+            l3, n_f = last3(mm)
+            if pnl[mm["name"]] <= 0 and l3 <= 0 and n_f >= cfg.grace:
+                cands.append(mm)
         cands.sort(key=lambda mm: pnl[mm["name"]])
         kos = cands[:cfg.ko_per_day]
         t_close = pd.Timestamp(d).tz_localize(tz) + close_off
@@ -153,7 +169,7 @@ def run_season(A, now=None):
                                text=f"KNOCKED OUT after {ndays} session(s) with {_money(pnl[mm['name']])}."))
         if act and not kos:
             events.append(dict(t=t_close, kind="info", name="", pnl=None,
-                               text="Nobody knocked out: every losing fighter was protected or there were no losers."))
+                               text="Nobody knocked out: no fighter was losing overall and over its last 3 sessions (new fighters get 3 sessions' grace)."))
         if kos:
             # waiting room: challengers never used yet, plus knocked-out fighters after a 5-session cooldown
             waiting = [s for s in A.pool if s["name"] not in used]
@@ -177,6 +193,13 @@ def run_season(A, now=None):
             if len(ok) < len(kos):
                 events.append(dict(t=t_close + pd.Timedelta(minutes=2), kind="info", name="", pnl=None,
                                    text=f"Only {min(len(ok), len(kos))} of {len(kos)} empty seats filled: no other challenger passed qualifying."))
+        for rn, rday in cfg.revive.items():
+            mm = members.get(rn)
+            if nxt == rday and mm is not None and mm["status"] == "ko":
+                members[rn] = dict(name=rn, origin="challenger", status="active", joined=nxt, base=eq_end(rn, d),
+                                   qual=qualify(rn, nxt), ko_day=None, ko_pnl=None, comeback=True)
+                events.append(dict(t=t_close + pd.Timedelta(minutes=4), kind="join", name=rn, pnl=None,
+                                   text=f"SECOND CHANCE! Back from the cemetery for another go, starting {pd.Timestamp(nxt):%a %d %b} from $0."))
         if (di + 1) % cfg.week_len == 0:
             wk = (di + 1) // cfg.week_len
             wdays = done_days[di + 1 - cfg.week_len: di + 1]
@@ -198,7 +221,9 @@ def run_season(A, now=None):
                                      f"WEEK {wk}: no eligible fighter made money, so no trophy this week.")))
     return dict(strats=strats, bt=bt, eq=eq, members=members, events=events, trophies=trophies, sessions=sessions,
                 live=live, done_days=done_days, complete=complete, sess_first_i=sess_first_i, sess_last_i=sess_last_i,
-                bench=bname, bench_base=bench_base, now=now, qualify=qualify)
+                bench=bname, bench_base=bench_base, now=now, qualify=qualify, monkey_eq=monkey_eq,
+                monkey_base=[(float(e.values[sess_first_i[first_day] - 1]) if season_on and sess_first_i[first_day] > 0 else
+                              (0.0 if season_on else float(e.values[-1]))) for e in monkey_eq])
 
 
 def _is_live(A, now):
@@ -316,13 +341,18 @@ def game_state(A, S):
                              spark=spark, marks=marks, trades=trades_list, joined=str(mm["joined"]) if mm["joined"] else None,
                              ko_day=str(mm["ko_day"]) if mm["ko_day"] else None))
     act = [f for f in fighters if f["status"] == "active"]
-    elig = [f for f in act if (f["pnl"] or 0) <= 0 and not (f["origin"] == "challenger" and f["joined"] == str(cur_day))]
+    for f in fighters:
+        sp = f["spark"]
+        f["fought"] = max(0, len(sp) - 1)
+        f["last3"] = (sp[-1] - sp[-4]) if len(sp) >= 4 else (sp[-1] if sp else 0.0)
+        f["grace_left"] = max(0, cfg.grace - f["fought"]) if f["status"] == "active" else 0
+    elig = [f for f in act if (f["pnl"] or 0) <= 0 and f["last3"] <= 0 and f["fought"] >= cfg.grace]
     elig.sort(key=lambda f: f["pnl"] or 0)
     danger = {f["name"] for f in elig[:cfg.ko_per_day]} if started else set()
     for f in fighters:
         f["danger"] = f["name"] in danger
-        f["safe"] = f["status"] == "active" and (f["pnl"] or 0) > 0
-        f["immune"] = f["status"] == "active" and f["origin"] == "challenger" and f["joined"] == str(cur_day)
+        f["safe"] = f["status"] == "active" and ((f["pnl"] or 0) > 0 or f["last3"] > 0)
+        f["immune"] = f["grace_left"] > 0
     beq = S["eq"][S["bench"]]
     boss = dict(name=S["bench"], pnl=_f(float(beq.values[-1]) - S["bench_base"], 0),
                 today=_f(float(beq.values[-1]) - (float(beq.values[day_start_i - 1]) if day_start_i > 0 else 0.0), 0))
@@ -369,7 +399,12 @@ def game_state(A, S):
     fighters.sort(key=lambda f: ({"active": 0, "entering": 1, "ko": 2}[f["status"]], -(f["pnl"] or 0)))
     out = dict(meta=meta, fighters=fighters, boss=boss, feed=feed_out, queue=queue, trophies=S["trophies"], candles=candles)
     out.update({k: v for k, v in A.extra.items() if k in ("headlines", "reddit")})
-    out["finals"] = finals(out, A.crown_needs_qual)
+    mk = [float(e.values[-1]) - b for e, b in zip(S["monkey_eq"], S["monkey_base"])] if started else [0.0] * len(S["monkey_eq"])
+    out["monkeys"] = dict(n=len(mk), median=_f(float(np.median(mk)), 0) if mk else None,
+                          p75=_f(float(np.percentile(mk, 75)), 0) if mk else None,
+                          best=_f(max(mk), 0) if mk else None, worst=_f(min(mk), 0) if mk else None)
+    out["meta"]["grace"] = cfg.grace
+    out["finals"] = finals(out, A.crown_needs_qual, A.risk_limit)
     return out
 
 
@@ -422,7 +457,7 @@ def day_stats(spark):
 FINAL_RISK_LIMIT = 1000.0  # worst single day must stay above -$1,000 (prop-firm style daily loss limit)
 
 
-def finals(state, crown_needs_qual=True):
+def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT):
     """Who would win the league right now, and which checks each contender passes."""
     rows = []
     for f in state["fighters"]:
@@ -430,11 +465,12 @@ def finals(state, crown_needs_qual=True):
             continue
         ch = dict(qualified=bool(f["qualified"] or not crown_needs_qual), profit=(f["pnl"] or 0) > 0,
                   consistent=f["days_total"] > 0 and f["days_up"] / f["days_total"] >= 0.5,
-                  risk=f["worst_day"] > -FINAL_RISK_LIMIT, trades=(f["wins"] + f["losses"]) >= 3)
+                  risk=f["worst_day"] > -risk_limit, trades=(f["wins"] + f["losses"]) >= 3,
+                  monkeys=(state.get("monkeys", {}).get("p75") is None) or (f["pnl"] or 0) > state["monkeys"]["p75"])
         rows.append(dict(name=f["name"], pnl=f["pnl"], checks=ch, passed=all(ch.values()), n_ok=sum(ch.values()),
                          beat_boss=(f["pnl"] or 0) > (state["boss"]["pnl"] or 0), days=f"{f['days_up']}/{f['days_total']}",
                          worst_day=round(f["worst_day"]), max_dd=round(f["max_dd"])))
     ok = sorted([r for r in rows if r["passed"]], key=lambda r: -(r["pnl"] or 0))
     close = sorted([r for r in rows if not r["passed"]], key=lambda r: (-r["n_ok"], -(r["pnl"] or 0)))
-    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], risk_limit=FINAL_RISK_LIMIT,
+    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], risk_limit=risk_limit,
                 needs_qual=crown_needs_qual)

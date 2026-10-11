@@ -303,10 +303,22 @@ CSS = r"""
 #arena .sp:hover .bub2{display:block}
 #arena .sp:hover{z-index:20}
 #arena .lobby2{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:12px;background:repeating-linear-gradient(45deg,#1a1f33 0 12px,#161b2e 12px 24px);border-top:4px solid #2a3150;border-bottom:3px solid var(--c)}
+#arena .cage{display:flex;gap:10px;align-items:center;font-size:12.5px;background:repeating-linear-gradient(90deg,#3a4468 0 2px,transparent 2px 10px);padding:6px 10px;border-radius:8px}
 #arena .elev{background:#0b0f1e;border:2px solid #3a4468;border-radius:8px;padding:6px 10px;min-width:180px}
 #arena .arr{display:flex;flex-wrap:wrap;align-items:flex-end;min-height:56px;padding-top:16px}
 #arena .empty2{min-height:60px}
 @media(max-width:700px){#arena .rooms2{height:118px}#arena .sp{transform:scale(.8);transform-origin:bottom center}#arena .rl{font-size:7.5px}#arena .wnd,#arena .tv{display:none}}
+@media(max-width:700px){#arena{padding:10px}#arena .tag2{display:none}#arena .sp:hover .tag2{display:block}
+#arena .chip2{font-size:7.5px;padding:0 3px;margin-bottom:12px}#arena .sp.sit .chip2{margin-bottom:22px}#arena .sp.alt .chip2{margin-bottom:22px}#arena .sp.alt.sit .chip2{margin-bottom:32px}
+#arena .census{font-size:11px}#arena .tin-name{font-size:11px}#arena .finalbar b{font-size:11px}#arena .finalbar{padding:8px}
+#arena .city-title{font-size:15px}#arena .moon{display:none}#arena .city-sub{font-size:11px}#arena .neon{font-size:7.5px;margin-bottom:26px}
+#arena .towers{gap:10px 12px}#arena .tw-wrap{width:46%;align-items:center}#arena .tower{width:100%;max-width:150px;padding:40px 8px 50px}
+#arena .wins{gap:5px}#arena .wins .win{width:100%;height:13px}#arena .city-sub .win{width:14px;height:10px}#arena .tw-info{font-size:11px}
+#arena .fnum2{flex-basis:20px;font-size:8px}#arena .rl{font-size:7px;left:3px}#arena .sofa,#arena .coffee,#arena .plant{transform:scale(.7);transform-origin:bottom}
+#arena .lobby2{gap:8px}#arena .statue,#arena .cage{font-size:11.5px}#arena .bub2{width:180px}
+#arena .tin-top .btn{padding:6px 9px;font-size:11px}
+#arena .dk .scr{width:14px;height:11px;left:58%}#arena .sp.d0 .chip2,#arena .sp.d0 .tag2{left:-4px;transform:none}}
+#arena .stale{margin-bottom:10px;padding:10px 12px;border-radius:10px;background:#3a2408;border:1px solid #ffb02088;color:#ffd58a;font-size:12.5px}
 #arena .rulebook{background:#0d1426;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;margin:8px 0 14px;font-size:12.5px}
 #arena .rulebook li{margin:4px 0}
 </style>
@@ -351,7 +363,7 @@ function card(f){
   if (f.qualified) tags.push('<span class="tg q">★ QUALIFIED</span>'); else tags.push('<span class="tg">UNPROVEN</span>');
   if (f.danger) tags.push('<span class="tg d">⚠ KO ZONE</span>');
   if (f.safe) tags.push('<span class="tg s">🛡 SAFE</span>');
-  if (f.immune) tags.push('<span class="tg n">NEW · IMMUNE TODAY</span>');
+  if (f.immune) tags.push(`<span class="tg n">🛡 GRACE · ${f.grace_left} more session${f.grace_left>1?'s':''}</span>`);
   if (f.status==='entering') tags.push('<span class="tg n">NEXT SESSION</span>');
   if (f.origin==='challenger' && !f.immune && f.status!=='entering') tags.push('<span class="tg n">CHALLENGER</span>');
   let pos = '';
@@ -496,7 +508,8 @@ function view(){
       <li><b>Sizing:</b> ${esc(M.sizing)}</li>
       <li><b>No cheating:</b> every decision is made at a bar's close and filled at the next bar's open. The bar still forming is ignored.${M.key==='hype'?' Headlines and Reddit numbers are only used after they were published.':''}</li>
       <li><b>As many trades as the setup allows:</b> after an exit, a fighter can go again whenever its setup shows up again. Every trade pays costs, so over-trading hurts.</li>
-      <li><b>Daily knockouts:</b> at ${esc(M.ko_time)} the bottom ${M.ko_per_day} fighters by arena P&amp;L are knocked out. Fighters in profit are <span class="up">🛡 safe</span>, and new challengers are immune on their first day.</li>
+      <li><b>Fair knockouts:</b> at ${esc(M.ko_time)} up to ${M.ko_per_day} fighters are knocked out, the worst first, but only if they are losing overall <i>and</i> lost money over their last 3 sessions. Every fighter gets ${M.grace} sessions' grace before it can be knocked out.</li>
+      <li><b>🐒 The Monkey team:</b> 20 monkeys trade at random with the same costs. A strategy that can't beat 75% of them is probably just lucky, so it can't win the Finals.</li>
       <li><b>New challengers:</b> empty seats go first to challengers that pass qualifying (last ${M.qual_sessions} sessions, at least 10 trades, profitable in both halves, profit factor ≥ 1.1). If not enough qualify, the best of the rest come in <i>on trial</i>.</li>
       <li><b>Comebacks:</b> knocked-out fighters return to the waiting room after 5 sessions and can fight their way back.</li>
       <li><b>Leader 👑:</b> ${M.crown_needs_qual?'the qualified fighter with the highest arena P&amp;L.':'social data has no long history to qualify on yet, so the crown is provisional: the best fighter in profit.'}</li>
@@ -566,7 +579,8 @@ function towerHTML(k, i){
       <div class="door"><span>${m.live?'OPEN':'CLOSED'}</span></div>
     </div>
     <div class="tw-info"><b>${esc(m.title)}</b> <span class="dot ${m.live?'on':''}"></span>${m.live?'live':'closed'}<br>
-      <span class="mu">${n} inside · ☠ ${ko} · Boss <span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span></span></div>
+      <span class="mu">${n} inside · ☠ ${ko} · Boss <span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span></span><br>
+      <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span></div>
   </div>`;
 }
 function cityView(){
@@ -609,7 +623,7 @@ function sprite(f, j, live, leader, roomX){
   const w=where(f, live); const op=f.opens||[];
   const desks=roomX.desks, beds=roomX.beds;
   let x, kls='', range='', dur=2.4;
-  if(w==='desk'){ x=desks[j%desks.length]-1.6; kls='sit'; }
+  if(w==='desk'){ x=desks[j%desks.length]-1.6; kls='sit d'+(j%desks.length); }
   else if(w==='bed'){ x=beds[j%beds.length]; kls='sleep'; }
   else if(w==='panic'){ x=roomX.office[0]+Math.random()*(roomX.office[1]-roomX.office[0]); kls='wander panic'; range=roomX.office.join(','); dur=1.0; }
   else { x=roomX.lounge[0]+Math.random()*(roomX.lounge[1]-roomX.lounge[0]); kls='wander'; range=roomX.lounge.join(','); dur=2.4; }
@@ -652,11 +666,11 @@ function finalsPanel(){
   const fr = D.frozen;
   const row = k => { const a=D.arenas[k], fz=fr&&fr.leagues&&fr.leagues[k], F=fz||a.finals; if(!F) return '';
     const W=F.winner, c=(F.closest||[])[0];
-    const chk = r => r ? Object.entries(r.checks).map(([n,v])=>`<span class="ck ${v?'ok':'no'}">${v?'✓':'✗'} ${({qualified:'qualified',profit:'in profit',consistent:'up most days',risk:'small worst day',trades:'3+ trades'})[n]}</span>`).join('') : '';
+    const chk = r => r ? Object.entries(r.checks).map(([n,v])=>`<span class="ck ${v?'ok':'no'}">${v?'✓':'✗'} ${({qualified:'qualified',profit:'in profit',consistent:'up most days',risk:'worst day > −$'+F.risk_limit,trades:'3+ trades',monkeys:'beats 75% of monkeys'})[n]}</span>`).join('') : '';
     return `<div class="fin"><div class="fin-h">${a.meta.icon} <b>${esc(a.meta.title)}</b> ${fz?'<span class="px" style="font-size:8px;color:#ffcc33">FINAL</span>':''}</div>
       ${W?`<div>${fz?'🏆 WINNER':'🥇 Would win now'}: <b data-k="${k}" data-n="${esc(W.name)}" style="cursor:pointer;text-decoration:underline">${esc(W.name)}</b> <span class="${cls(W.pnl)}">${money(W.pnl)}</span> ${W.beat_boss?'<span class="up">· beats the Boss</span>':'<span class="dn">· Boss is ahead</span>'}</div><div class="cks">${chk(W)}</div>`
          :`<div class="mu">${fz?'No fighter passed every check: no winner.':'Nobody passes every check yet.'}</div>${c?`<div style="margin-top:4px">Closest: <b data-k="${k}" data-n="${esc(c.name)}" style="cursor:pointer;text-decoration:underline">${esc(c.name)}</b> <span class="${cls(c.pnl)}">${money(c.pnl)}</span></div><div class="cks">${chk(c)}</div>`:''}`}</div>`; };
-  return `<div class="finals"><div class="px" style="font-size:10px;color:#ffcc33;margin-bottom:8px">🏆 THE FINALS · a winner must pass every check (worst day better than −$${(D.arenas[D.order[0]].finals||{}).risk_limit||1000})</div>
+  return `<div class="finals"><div class="px" style="font-size:10px;color:#ffcc33;margin-bottom:8px">🏆 THE FINALS · a winner must pass every check, including beating the 🐒 monkeys</div>
     <div class="fin-grid">${D.order.map(row).join('')}</div></div>`;
 }
 function towerView(){
@@ -681,6 +695,7 @@ function towerView(){
       ${L?apartment([L], 'P', live, m.leader, true):`<div class="apt pent empty2"><div class="fnum2 px">👑</div><div class="mu" style="padding:16px">The penthouse is empty. ${m.crown_needs_qual?'A qualified fighter in profit moves in here.':'The first fighter in profit moves in here.'}</div></div>`}
       ${groups.map((g,i)=>apartment(g, groups.length-i, live, m.leader, false)).join('')}
       <div class="lobby2"><div class="statue"><div class="ped">🗿</div><div><b>THE BOSS</b> · ${esc(a.boss.name)}<br><span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span> <span class="mu">(today ${money(a.boss.today)})</span></div></div>
+        <div class="cage"><div class="ped">🐒</div><div><b>MONKEY CAGE</b> · ${a.monkeys?a.monkeys.n:0} random traders<br><span class="mu">typical</span> <span class="${cls((a.monkeys||{}).median)}">${money((a.monkeys||{}).median)}</span> · <span class="mu">top 25%</span> <span class="${cls((a.monkeys||{}).p75)}">${money((a.monkeys||{}).p75)}</span></div></div>
         <div class="elev"><span class="px" style="font-size:8px">🛗 ARRIVALS</span><div class="arr">${arriving.map(f=>`<div class="sp stand" data-n="${esc(f.name)}" style="position:relative;left:auto">${guy(f,'')}<i class="legs"><i></i><i></i></i><div class="tag2">${esc(f.name.slice(0,14))}</div></div>`).join('')||'<span class="mu" style="font-size:11px">nobody today</span>'}</div></div>
         <div class="mu" style="font-size:11.5px">Knockouts: <b style="color:#ff4d5e">${esc(m.ko_time)}</b> · bottom ${m.ko_per_day} go to the cemetery</div></div>
       <div class="basement"><div class="ph-t px">🚇 THE TUNNEL · challengers waiting for a seat</div>
@@ -703,10 +718,17 @@ setInterval(()=>{
 }, 1700);
 setInterval(tickCountdown, 1000);
 
+function stale(){
+  if(!D.built_at || !D.reload) return '';
+  const mins=Math.round((Date.now()-Date.parse(D.built_at))/60000);
+  if(mins<50) return '';
+  const t = mins<120 ? mins+' minutes' : Math.round(mins/60)+' hours';
+  return `<div class="stale">⚠ Last update was ${t} ago. GitHub is running late; this page refreshes itself as soon as the next update lands.</div>`;
+}
 function render(){
   pick();
   if(st.view==='city' || st.view==='tower'){
-    R.innerHTML = (st.view==='city'?cityView():towerView()) + `<div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
+    R.innerHTML = stale() + (st.view==='city'?cityView():towerView()) + `<div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
     tickCountdown();
     return;
   }
@@ -714,7 +736,7 @@ function render(){
   if(A.reddit!==undefined || A.headlines!==undefined) tabs.push(['chatter','CHATTER']);
   tabs.push(['rules','RULES']);
   if(!tabs.find(t=>t[0]===st.tab)) st.tab='arena';
-  R.innerHTML = `
+  R.innerHTML = stale() + `
   <div class="top"><div><button class="btn" data-go="city" style="margin-bottom:8px">← City</button> <button class="btn" data-go="tower" style="margin-bottom:8px">🏢 Inside the tower</button><div class="logo px">STRATEGY ARENA</div>
     <div class="sub">${M.icon} ${esc(M.title)} · 15-min bars · last complete bar ${esc(M.last_bar)} UK · updated ${esc(M.updated)}</div></div>
     <div style="display:flex;gap:14px;align-items:center;max-width:60%">
@@ -743,7 +765,7 @@ if(D.reload){ setTimeout(()=>{ try{ if(!R.querySelector('.modal.on')) location.r
 """
 
 
-def render(states, order, reload_sec=None, final_at=None, frozen=None):
-    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec, final_at=final_at, frozen=frozen),
+def render(states, order, reload_sec=None, final_at=None, frozen=None, built_at=None):
+    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec, final_at=final_at, frozen=frozen, built_at=built_at),
                       default=str).replace("</", "<\\/")
     return CSS + '<div id="arena"></div>' + JS.replace("__DATA__", data)

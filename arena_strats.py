@@ -442,3 +442,49 @@ def benchmark():
     return S("Buy & Hold", "Benchmark", lambda d: np.ones(len(d)), intraday=False,
              about="Just holds 1 contract the whole time. Every fighter should beat this.",
              why_l="Always long.", watch="Always long.")
+
+
+# ============================================================ the Monkey team (luck test)
+def _mix(x):
+    """Deterministic pseudo-random numbers from integers (same bar + same monkey = same 'coin flip' every run)."""
+    x = x.astype(np.uint64)
+    x ^= x >> np.uint64(33)
+    x *= np.uint64(0xFF51AFD7ED558CCD)
+    x ^= x >> np.uint64(33)
+    x *= np.uint64(0xC4CEB9FE1A85EC53)
+    x ^= x >> np.uint64(33)
+    return (x >> np.uint64(11)).astype(np.float64) / float(2 ** 53)
+
+
+def monkeys(n=20, trades_per_day=2.0, intraday=True):
+    """Random traders: at any bar they may flip a coin, go long or short, and hold for 30 min to 4 hours.
+    A strategy that can't beat most of them is probably just lucky."""
+    import zlib
+    out = []
+    for k in range(n):
+        def fn(d, k=k):
+            bpd = d.attrs.get("bpd", 26)
+            asset = str(d["asset"].iloc[0]) if "asset" in d else ""
+            slot = np.asarray(d.index.tz_convert("UTC").as_unit("ns").asi8 // 900_000_000_000, dtype=np.int64)
+            salt = (zlib.crc32(f"{asset}|{k}".encode()) + 1) * 2654435761
+            base = (slot.astype(np.uint64) * np.uint64(6364136223846793005)) + np.uint64(salt % (2 ** 63))
+            u1, u2, u3 = _mix(base), _mix(base + np.uint64(1)), _mix(base + np.uint64(2))
+            p = trades_per_day / bpd
+            t = np.zeros(len(d))
+            cur, left = 0, 0
+            kk = d["k"].values
+            for i in range(len(d)):
+                if kk[i] == 0 and intraday:
+                    cur, left = 0, 0
+                if left > 0:
+                    left -= 1
+                    if left == 0:
+                        cur = 0
+                if cur == 0 and u1[i] < p:
+                    cur = 1 if u2[i] < 0.5 else -1
+                    left = 2 + int(u3[i] * 15)
+                t[i] = cur
+            return t
+        out.append(S(f"Monkey #{k + 1}", "Monkey", fn, intraday=intraday, about="Trades at random.",
+                     why_l="Flipped a coin: heads, buy.", why_s="Flipped a coin: tails, sell.", scope="each"))
+    return out

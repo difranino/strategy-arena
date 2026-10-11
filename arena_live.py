@@ -86,7 +86,9 @@ class Settings:
         self.__dict__.update(dict(nq_start="2026-10-07", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
                                   ko_hype=1, nq_symbol="NQ=F", point_value=2.0, nq_cost=2.5, stock_size=10000.0,
                                   stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
-                                  finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena"))
+                                  finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena",
+                                  risk_limits={"nq": 750, "stocks": 1500, "crypto": 1000, "hype": 1500},
+                                  revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3))
         self.__dict__.update(kw)
 
 
@@ -97,11 +99,20 @@ def build_nq(st, folder, now, raw=None):
         if raw is None:
             got = load_symbols(["MNQ=F"], folder, prepost=True)
             raw = got["MNQ=F"]
-    df = _prep(raw, "rth", now)
+    df = C.drop_unfinished(C.prepare(raw, "rth"), now)
+    try:  # roll guard: compare with QQQ to remove contract-roll jumps
+        ref = C.prepare(load_symbols(["QQQ"], folder)["QQQ"], "rth")
+        df, rolls = C.roll_adjust(df, ref)
+        if rolls:
+            print("Futures roll adjusted:", rolls)
+    except Exception as e:
+        print(f"Roll guard skipped ({e}).")
+    df = C.add_indicators(df)
     df["asset"] = "NQ"
     A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, NQS.original_roster(), NQS.challenger_pool(),
-                 NQS.benchmark(), SE.Cfg(st.nq_start, ko_per_day=st.ko_nq),
+                 NQS.benchmark(), SE.Cfg(st.nq_start, ko_per_day=st.ko_nq, grace=st.grace, revive=st.revive.get("nq")),
                  dict(point_value=st.point_value, cost_rt=st.nq_cost), market="rth", unit_label="contract",
+                 risk_limit=st.risk_limits.get("nq", 1000), monkeys=NQS.monkeys(st.monkeys),
                  extra=dict(sizing_text=f"1 MNQ contract (${st.point_value:g} per point), ${st.nq_cost:.2f} costs per round trip."))
     return A
 
@@ -114,7 +125,8 @@ def build_stocks(st, folder, now, raws=None):
     STK.add_market_cols(dfs, spy)
     sizing = dict(notional=st.stock_size, cost_pct=st.stock_cost_pct)
     A = SE.Arena("stocks", "Stocks", "📈", dfs, spy, STK.roster(), STK.pool(), STK.benchmark(),
-                 SE.Cfg(st.new_start, ko_per_day=st.ko_stocks), sizing, market="rth", unit_label="stocks",
+                 SE.Cfg(st.new_start, ko_per_day=st.ko_stocks, grace=st.grace, revive=st.revive.get("stocks")), sizing,
+                 market="rth", unit_label="stocks", risk_limit=st.risk_limits.get("stocks", 1000), monkeys=NQS.monkeys(st.monkeys),
                  extra=dict(sizing_text=f"${st.stock_size:,.0f} per position on any of the 9 stocks (long or short), "
                                         f"{st.stock_cost_pct * 100:.2f}% costs per round trip."))
     return A, dfs, spy
@@ -127,7 +139,8 @@ def build_crypto(st, folder, now, raws=None):
     master = dfs["BTC-USD"]
     sizing = dict(notional=st.crypto_size, cost_pct=st.crypto_cost_pct)
     A = SE.Arena("crypto", "Crypto", "₿", dfs, master, CRY.roster(), CRY.pool(), CRY.benchmark(),
-                 SE.Cfg(st.new_start, ko_per_day=st.ko_crypto, week_len=7), sizing, market="crypto", unit_label="coins",
+                 SE.Cfg(st.new_start, ko_per_day=st.ko_crypto, week_len=7, grace=st.grace, revive=st.revive.get("crypto")), sizing,
+                 market="crypto", unit_label="coins", risk_limit=st.risk_limits.get("crypto", 1000), monkeys=NQS.monkeys(st.monkeys),
                  extra=dict(sizing_text=f"${st.crypto_size:,.0f} per position on BTC, ETH or SOL (long or short), "
                                         f"{st.crypto_cost_pct * 100:.2f}% costs per round trip. Trades 24/7; a session is one UK day."))
     return A
@@ -142,7 +155,8 @@ def build_hype(st, folder, now, stock_dfs, spy, news=None, reddit=None):
     SOC.add_social_cols(dfs, news, reddit)
     sizing = dict(notional=st.stock_size, cost_pct=st.stock_cost_pct)
     A = SE.Arena("hype", "Hype", "🗣️", dfs, spy, SOC.roster(), SOC.pool(), STK.benchmark(),
-                 SE.Cfg(st.new_start, ko_per_day=st.ko_hype), sizing, market="rth", unit_label="stocks",
+                 SE.Cfg(st.new_start, ko_per_day=st.ko_hype, grace=st.grace, revive=st.revive.get("hype")), sizing,
+                 market="rth", unit_label="stocks", risk_limit=st.risk_limits.get("hype", 1000), monkeys=NQS.monkeys(st.monkeys),
                  crown_needs_qual=False, pool_needs_qual=False,
                  extra=dict(sizing_text=f"${st.stock_size:,.0f} per position on the same 9 stocks, trading on Reddit chatter "
                                         f"and news-headline mood. {st.stock_cost_pct * 100:.2f}% costs per round trip.",
@@ -178,7 +192,8 @@ def build_all(st, folder, now=None, which=("nq", "stocks", "crypto", "hype"), ca
     order = [k for k in ("nq", "stocks", "crypto", "hype") if k in cache]
     add_code_links(cache, os.environ.get("GITHUB_REPOSITORY") or getattr(st, "repo", None))
     frozen = freeze_finals(st, folder, now, cache)
-    return H.render(cache, order, reload_sec, final_at=getattr(st, "finals_at", None), frozen=frozen), cache, errs
+    return H.render(cache, order, reload_sec, final_at=getattr(st, "finals_at", None), frozen=frozen,
+                    built_at=pd.Timestamp.now(tz="UTC").isoformat()), cache, errs
 
 
 def code_index():
