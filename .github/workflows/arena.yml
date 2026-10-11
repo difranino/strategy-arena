@@ -2,7 +2,7 @@ name: Strategy City
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes, 24/7
+    - cron: "7,22,37,52 * * * *"   # every 15 minutes, 24/7 (off the busy :00 slot)
   workflow_dispatch:          # "Run workflow" button
 
 permissions:
