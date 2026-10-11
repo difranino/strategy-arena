@@ -85,7 +85,8 @@ class Settings:
     def __init__(self, **kw):
         self.__dict__.update(dict(nq_start="2026-10-07", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
                                   ko_hype=1, nq_symbol="NQ=F", point_value=2.0, nq_cost=2.5, stock_size=10000.0,
-                                  stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015))
+                                  stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
+                                  finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena"))
         self.__dict__.update(kw)
 
 
@@ -175,7 +176,52 @@ def build_all(st, folder, now=None, which=("nq", "stocks", "crypto", "hype"), ca
             traceback.print_exc()
             errs.append(f"{key}: {e}")
     order = [k for k in ("nq", "stocks", "crypto", "hype") if k in cache]
-    return H.render(cache, order, reload_sec), cache, errs
+    add_code_links(cache, os.environ.get("GITHUB_REPOSITORY") or getattr(st, "repo", None))
+    frozen = freeze_finals(st, folder, now, cache)
+    return H.render(cache, order, reload_sec, final_at=getattr(st, "finals_at", None), frozen=frozen), cache, errs
+
+
+def code_index():
+    """Where each fighter's rules live in the code, so the site can link straight to them."""
+    import re
+    idx = {}
+    for mod in (NQS, STK, CRY, SOC):
+        path = mod.__file__
+        for i, line in enumerate(open(path, encoding="utf-8")):
+            m = re.search(r'S\("([^"]+)"', line)
+            if m and m.group(1) not in idx:
+                idx[m.group(1)] = (os.path.basename(path), i + 1)
+    return idx
+
+
+def add_code_links(cache, repo):
+    if not repo:
+        return
+    idx = code_index()
+    for st_ in cache.values():
+        for f in st_["fighters"]:
+            if f["name"] in idx:
+                fn, ln = idx[f["name"]]
+                f["code"] = f"https://github.com/{repo}/blob/main/{fn}#L{ln}"
+
+
+def freeze_finals(st, folder, now, cache):
+    """At the finals deadline, lock in each league's winner (saved, so it never changes afterwards)."""
+    import json
+    fa = getattr(st, "finals_at", None)
+    if not fa or folder is None:
+        return None
+    path = os.path.join(folder, "finals.json")
+    if os.path.exists(path):
+        try:
+            return json.load(open(path))
+        except Exception:
+            return None
+    if now >= pd.Timestamp(fa) and len(cache) == 4:
+        data = dict(at=str(pd.Timestamp(fa)), leagues={k: v["finals"] for k, v in cache.items()})
+        json.dump(data, open(path, "w"), default=str)
+        return data
+    return None
 
 
 def us_open(now=None):

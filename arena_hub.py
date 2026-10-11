@@ -220,6 +220,95 @@ CSS = r"""
 #arena .waiter.q{opacity:.65}
 #arena .side .stones .stone{width:42px;height:48px}
 @media(max-width:760px){#arena .top>div:last-child{max-width:100%!important;flex-wrap:wrap}#arena .towers{gap:14px}#arena .tower{width:132px}#arena .win{width:18px}}
+#arena .finalbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:0 0 12px;padding:10px;border-radius:12px;background:linear-gradient(90deg,#2a1d05,#3a2a08,#2a1d05);border:1px solid #ffcc3366;color:#ffe9a8}
+#arena .finalbar .px{font-size:10px;color:#ffcc33}
+#arena .finalbar b{font-family:'Press Start 2P',monospace;font-size:13px;color:#fff;letter-spacing:.04em}
+#arena .finals{position:relative;margin-top:12px;background:#120f22;border:1px solid #ffcc3355;border-radius:12px;padding:12px}
+#arena .fin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:900px){#arena .fin-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){#arena .fin-grid{grid-template-columns:1fr}}
+#arena .fin{background:#0c1124;border:1px solid var(--ln);border-radius:10px;padding:10px;font-size:12px;color:#dfe5f5}
+#arena .fin-h{margin-bottom:6px}
+#arena .cks{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+#arena .ck{font-size:10px;padding:2px 6px;border-radius:6px;border:1px solid var(--ln)}
+#arena .ck.ok{color:#2fe07a;border-color:#2fe07a55}#arena .ck.no{color:#ff6b7d;border-color:#ff4d5e55}
+#arena .census{text-align:center;font-size:12px;color:#b8c2e0;margin:-4px 0 12px}
+#arena .building2{border:3px solid var(--c);border-radius:10px 10px 0 0;background:#0c1124;box-shadow:0 0 30px -10px var(--c);overflow:hidden}
+#arena .roof2{text-align:center;padding:8px;background:linear-gradient(180deg,var(--g),#0c1124);border-bottom:3px solid var(--c)}
+#arena .roof2 .px{font-size:10px;color:var(--c);text-shadow:0 0 8px var(--c)}
+#arena .apt{display:flex;border-bottom:4px solid #2a3150}
+#arena .apt.pent{background:linear-gradient(180deg,#2a2208,#16122a)}
+#arena .fnum2{flex:0 0 30px;display:grid;place-items:center;font-size:9px;color:#8592b0;background:#090d1c;border-right:2px solid #2a3150}
+#arena .rooms2{position:relative;flex:1;height:132px;display:grid;grid-template-columns:40% 30% 30%;overflow:hidden}
+#arena .room{position:relative;border-right:3px solid #2a3150}
+#arena .room:last-of-type{border-right:none}
+#arena .rl{position:absolute;top:4px;left:6px;font-size:9px;font-weight:800;letter-spacing:.06em;color:#8592b0;z-index:1}
+#arena .day .r-office{background:linear-gradient(180deg,#1b2747 0 72%,#3a2f2a 72%)}
+#arena .day .r-lounge{background:linear-gradient(180deg,#2a2346 0 72%,#40302a 72%)}
+#arena .day .r-bed{background:linear-gradient(180deg,#232a40 0 72%,#33303c 72%)}
+#arena .night .room{background:linear-gradient(180deg,#0d1226 0 72%,#1d1a22 72%)}
+#arena .night .r-bed{background:linear-gradient(180deg,#121633 0 72%,#1f1c28 72%)}
+#arena .pent .room{background:linear-gradient(180deg,#2b2410 0 72%,#3a2c18 72%)!important}
+#arena .wnd{position:absolute;top:18px;right:10%;width:34px;height:30px;border:3px solid #3a4468;border-radius:3px;background:linear-gradient(#7fb7ff,#bfe0ff)}
+#arena .wnd.w2{right:auto;left:42%}
+#arena .night .wnd{background:linear-gradient(#081030,#1a2350);box-shadow:inset 6px -6px 0 -3px #fff6d5}
+#arena .alarm{animation:alarmbg 1.2s infinite}
+@keyframes alarmbg{50%{box-shadow:inset 0 0 40px rgba(255,42,68,.35)}}
+#arena .siren{position:absolute;top:4px;right:8px;width:12px;height:8px;border-radius:6px 6px 0 0;background:#ff2a44;box-shadow:0 0 16px 4px #ff2a44;animation:blink .6s infinite}
+#arena .sofa{position:absolute;bottom:26%;left:14%;width:46%;height:22px;background:#7a3e6a;border-radius:8px 8px 3px 3px;box-shadow:0 -8px 0 -2px #8f4a7d}
+#arena .tv{position:absolute;top:18px;left:22%;width:40px;height:24px;background:#05070f;border:3px solid #2a3150;border-radius:3px;box-shadow:inset 0 0 10px #3ea8ff}
+#arena .night .tv{box-shadow:none}
+#arena .coffee{position:absolute;bottom:28%;right:10%;width:14px;height:24px;background:#556;border-radius:3px;box-shadow:0 -6px 0 -3px #c33}
+#arena .plant{position:absolute;bottom:28%;right:26%;width:12px;height:12px;background:#a0522d;border-radius:2px;box-shadow:0 -12px 0 2px #2fa35a}
+#arena .furn{position:absolute;inset:0;pointer-events:none}
+#arena .dk{position:absolute;bottom:22px;width:7.2%;height:12px;background:#6b4a2e;border-radius:2px;box-shadow:0 3px 0 #3e2a1a;z-index:2}
+#arena .dk .scr{position:absolute;bottom:12px;left:62%;width:24px;height:18px;background:#05070f;border:2px solid #3a4468;border-radius:2px}
+#arena .day .dk .scr{box-shadow:inset 0 0 8px #3ea8ff}
+#arena .bd2{position:absolute;bottom:18px;width:6%;height:16px;background:#e8e8f2;border-radius:3px;box-shadow:0 4px 0 #6b4a2e;z-index:1}
+#arena .bd2 .pil{position:absolute;left:2px;top:-5px;width:12px;height:7px;background:#fff;border-radius:3px}
+#arena .bd2 .blk{position:absolute;right:0;top:0;width:65%;height:100%;background:#3e6fd8;border-radius:0 3px 3px 0}
+#arena .pent .bd2 .blk{background:#c9a227}
+#arena .sp{position:absolute;bottom:24px;width:28px;margin-left:-14px;z-index:3;cursor:pointer;transition:left var(--dur,2.4s) linear}
+#arena .sp .guy{position:relative;left:0;bottom:0;width:28px;height:36px}
+#arena .sp .legs{position:absolute;left:8px;top:34px;width:12px;height:10px}
+#arena .sp .legs i{position:absolute;top:0;width:5px;height:9px;background:#2b3350;border-radius:2px}
+#arena .sp .legs i:first-child{left:0}#arena .sp .legs i:last-child{right:0}
+#arena .sp.walking .legs i:first-child{animation:legA .35s infinite alternate}
+#arena .sp.walking .legs i:last-child{animation:legB .35s infinite alternate}
+@keyframes legA{from{transform:rotate(25deg)}to{transform:rotate(-25deg)}}
+@keyframes legB{from{transform:rotate(-25deg)}to{transform:rotate(25deg)}}
+#arena .sp.walking .guy{animation:bob .35s infinite alternate}
+@keyframes bob{to{transform:translateY(-2px)}}
+#arena .sp.flip .guy,#arena .sp.flip .legs{transform:scaleX(-1)}
+#arena .sp.sit{bottom:30px;z-index:1}
+#arena .sp.sit .legs{display:none}
+#arena .sp.sit .guy .arm{animation:type .3s infinite alternate}
+#arena .sp.sit .guy .arm.r{animation-delay:.15s}
+#arena .sp.sleep{bottom:30px;z-index:2}
+#arena .sp.sleep .guy{transform:rotate(-90deg) translate(-6px,-4px)}
+#arena .sp.sleep .legs{display:none}
+#arena .sp.panic .guy{animation:shake .2s infinite}
+#arena .sp.stand{display:inline-block;margin:0 6px;bottom:auto}
+#arena .tag2{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:2px;font-size:8.5px;font-weight:700;white-space:nowrap;color:#cfd7ea;background:#05070fcc;padding:1px 4px;border-radius:4px}
+#arena .sp.sit .tag2,#arena .sp.sleep .tag2{margin-bottom:14px}
+#arena .sp.alt .tag2{margin-bottom:16px}#arena .sp.alt.sit .tag2,#arena .sp.alt.sleep .tag2{margin-bottom:28px}#arena .sp.alt .chip2{margin-bottom:30px}#arena .sp.alt.sit .chip2{margin-bottom:42px}
+#arena .chip2{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:16px;font-size:9px;font-weight:800;white-space:nowrap;background:#0b1022;border:1px solid #2a3150;padding:1px 5px;border-radius:6px}
+#arena .sp.sit .chip2{margin-bottom:28px}
+#arena .crown2{position:absolute;top:-14px;left:7px;font-size:14px;z-index:4}
+#arena .sweat2{position:absolute;top:0;left:-6px;font-size:11px;animation:drip 1s infinite}
+#arena .zz2{position:absolute;top:-22px;left:18px;color:#9fb0ff;font-weight:800;font-size:11px;animation:zz 2.4s infinite}
+#arena .cash2{position:absolute;top:-10px;left:24px;font-size:12px;animation:walk 1.2s infinite}
+#arena .new2{position:absolute;top:-6px;left:-6px;font-size:11px}
+#arena .bub2{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:36px;width:230px;background:#f4f6ff;color:#121828;font-size:11.5px;line-height:1.35;padding:8px 10px;border-radius:10px;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#arena .sp:hover .bub2{display:block}
+#arena .sp:hover{z-index:20}
+#arena .lobby2{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:12px;background:repeating-linear-gradient(45deg,#1a1f33 0 12px,#161b2e 12px 24px);border-top:4px solid #2a3150;border-bottom:3px solid var(--c)}
+#arena .elev{background:#0b0f1e;border:2px solid #3a4468;border-radius:8px;padding:6px 10px;min-width:180px}
+#arena .arr{display:flex;flex-wrap:wrap;align-items:flex-end;min-height:56px;padding-top:16px}
+#arena .empty2{min-height:60px}
+@media(max-width:700px){#arena .rooms2{height:118px}#arena .sp{transform:scale(.8);transform-origin:bottom center}#arena .rl{font-size:7.5px}#arena .wnd,#arena .tv{display:none}}
+#arena .rulebook{background:#0d1426;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;margin:8px 0 14px;font-size:12.5px}
+#arena .rulebook li{margin:4px 0}
 </style>
 """
 
@@ -341,6 +430,9 @@ function openModal(name, asset){
       <div><span>1st / 2nd half</span><b style="font-size:13px;white-space:nowrap"><span class="${cls(q.h1)}">${money(q.h1)}</span> / <span class="${cls(q.h2)}">${money(q.h2)}</span></b></div>
       <div><span>Sharpe / PF</span><b>${q.sharpe??'–'} / ${q.pf??'–'}</b></div>
     </div>
+    <h4 class="px" style="font-size:9px;color:#8592b0">📜 RULEBOOK · how this strategy trades</h4>
+    <div class="rulebook"><ul style="margin:0;padding-left:18px">${(f.rules||[]).map(r=>`<li>${esc(r)}</li>`).join('')}</ul>
+      <div style="margin-top:8px;font-size:12px">${f.code?`<a href="${esc(f.code)}" target="_blank" rel="noopener" style="color:#3ef0ff">View the exact code on GitHub ↗</a> · `:''}<span class="mu">Want it in TradingView? Once it wins, it can be rewritten in Pine Script.</span></div></div>
     <h4 class="px" style="font-size:9px;color:#8592b0">OPEN POSITIONS</h4>${ol}
     <h4 class="px" style="font-size:9px;color:#8592b0;margin-top:14px">TODAY'S BATTLEFIELD · ${esc(M.cur_day)} (UK times)</h4>${abtn}${chart(f, asset)}
     <div class="mu" style="font-size:11px;margin:6px 0 14px">▲/▼ = entries, ○ = exits. Dashed lines = live stop and target.</div>
@@ -485,9 +577,11 @@ function cityView(){
   return `<div class="city">
     <div class="sky">${stars}<i class="moon"></i><div class="far"></div></div>
     <div class="city-title px">STRATEGY CITY</div>
+    <div style="position:relative;margin-top:10px">${countdown()}</div>
     <div class="city-sub">Tap a tower to go inside. Lit windows are fighters: <i class="win w-gold"></i> in a trade · <i class="win w-green"></i> in profit · <i class="win w-pink"></i> losing · <i class="win w-red"></i> KO zone · <i class="win w-cyan"></i> arriving</div>
     <div class="towers">${D.order.map(towerHTML).join('')}</div>
     <div class="street"><div class="tape"><div class="tape-in">${tape||'<span>Quiet night in the city.</span>'}</div></div></div>
+    ${finalsPanel()}
     <div class="yard"><div class="yard-t px">☠ CEMETERY · ${graves.length}</div><div class="stones">${graves.slice(0,40).map(g=>`<div class="stone" data-k="${g.k}" data-n="${esc(g.f.name)}" title="${esc(g.f.name)} · ${money(g.f.pnl)}"><span>RIP</span><small>${esc(g.f.name.split(' ')[0])}</small></div>`).join('')||'<span class="mu">No graves yet.</span>'}</div></div>
     <div class="mu" style="font-size:11px;margin-top:8px;text-align:center">Updated ${esc(D.arenas[D.order[0]].meta.updated)} UK${D.reload?` · refreshes itself every few minutes`:''}</div>
   </div>`;
@@ -503,39 +597,117 @@ function desk(f, live, leader){
     <div class="station">${guy(f, s)}${badge}<div class="monitor">${mon}</div><div class="table"></div></div>
     <div class="plate"><span class="pn">${esc(f.name)}</span><b class="${cls(f.pnl)}">${money(f.pnl)}</b></div></div>`;
 }
+// ======================= GAME LOBBY: apartments with moving residents =======================
+function where(f, live){
+  const op=(f.opens||[]).length;
+  if(op) return 'desk';            // in a trade: at the computer
+  if(f.danger) return 'panic';     // in the KO zone: pacing the trading room
+  if(!live) return 'bed';          // market closed: asleep
+  return 'lounge';                 // market open, waiting for a setup: hanging out
+}
+function sprite(f, j, live, leader, roomX){
+  const w=where(f, live); const op=f.opens||[];
+  const desks=roomX.desks, beds=roomX.beds;
+  let x, kls='', range='', dur=2.4;
+  if(w==='desk'){ x=desks[j%desks.length]-1.6; kls='sit'; }
+  else if(w==='bed'){ x=beds[j%beds.length]; kls='sleep'; }
+  else if(w==='panic'){ x=roomX.office[0]+Math.random()*(roomX.office[1]-roomX.office[0]); kls='wander panic'; range=roomX.office.join(','); dur=1.0; }
+  else { x=roomX.lounge[0]+Math.random()*(roomX.lounge[1]-roomX.lounge[0]); kls='wander'; range=roomX.lounge.join(','); dur=2.4; }
+  const chip = op.length ? `<span class="chip2 ${cls(op.reduce((a,o)=>a+(o.upnl||0),0))}">${op.length>1?op.length+' open ':''}${op.length===1?(op[0].side==='Long'?'▲ ':'▼ ')+esc(short(op[0].asset)):''} ${money(op.reduce((a,o)=>a+(o.upnl||0),0))}</span>` : '';
+  const fx = (f.name===leader?'<span class="crown2">👑</span>':'') + (w==='panic'?'<span class="sweat2">💦</span>':'') + (w==='bed'?'<span class="zz2">z<small>z</small>z</span>':'')
+           + ((f.today||0)>0 && w!=='bed'?'<span class="cash2">💰</span>':'') + (f.immune?'<span class="new2">✨</span>':'');
+  if(j%2) kls+=' alt';
+  return `<div class="sp ${kls} w-${w}" data-n="${esc(f.name)}" data-range="${range}" data-dur="${dur}" style="left:${x}%;--dur:${dur}s">
+    <div class="bub2"><b>${esc(f.name)}</b> <span class="${cls(f.pnl)}">${money(f.pnl)}</span><br>${esc(f.thought)}</div>
+    <div class="tag2 ${cls(f.pnl)}">${esc(f.name.length>16?f.name.slice(0,15)+'…':f.name)}</div>${chip}${fx}
+    ${guy(f, '')}<i class="legs"><i></i><i></i></i></div>`;
+}
+const ROOMX = {desks:[8,17,26,35], beds:[73.5,80.5,87.5,94.5], office:[5,37], lounge:[44,66]};
+function furniture(live, danger, penthouse){
+  const desks=(penthouse?[ROOMX.desks[0]]:ROOMX.desks).map(x=>`<div class="dk" style="left:${x-3.6}%"><i class="scr"></i></div>`).join('');
+  const beds=(penthouse?[ROOMX.beds[0]]:ROOMX.beds).map(x=>`<div class="bd2" style="left:${x-3}%"><i class="pil"></i><i class="blk"></i></div>`).join('');
+  return `<div class="room r-office ${danger?'alarm':''}"><span class="rl">💹 TRADING ROOM</span><i class="wnd"></i><i class="wnd w2"></i>${danger?'<i class="siren"></i>':''}</div>
+    <div class="room r-lounge"><span class="rl">☕ LOUNGE</span><i class="sofa"></i><i class="tv"></i><i class="coffee"></i><i class="plant"></i></div>
+    <div class="room r-bed"><span class="rl">🛏 ${penthouse?'SUITE':'BEDROOMS'}</span><i class="wnd"></i></div>
+    <div class="furn">${desks}${beds}</div>`;
+}
+function apartment(group, num, live, leader, penthouse){
+  const danger=group.some(f=>f.danger);
+  return `<div class="apt ${live?'day':'night'} ${penthouse?'pent':''}">
+    <div class="fnum2 px">${penthouse?'👑':num}</div>
+    <div class="rooms2">${furniture(live, danger, penthouse)}${group.map((f,j)=>sprite(f,j,live,leader,ROOMX)).join('')}</div></div>`;
+}
+function countdown(){
+  if(!D.final_at) return '';
+  return `<div class="finalbar"><span class="px">🏆 FINAL BELL</span> <b id="cd">…</b> <span class="mu">· ${new Date(D.final_at).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>`;
+}
+function tickCountdown(){
+  const el=document.getElementById('cd'); if(!el||!D.final_at) return;
+  const ms=new Date(D.final_at)-new Date();
+  if(ms<=0){ el.textContent = D.frozen ? 'WINNERS CROWNED' : 'deciding the winners…'; return; }
+  const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5), m=Math.floor(ms%36e5/6e4), s=Math.floor(ms%6e4/1e3);
+  el.textContent=`${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+}
+function finalsPanel(){
+  const fr = D.frozen;
+  const row = k => { const a=D.arenas[k], fz=fr&&fr.leagues&&fr.leagues[k], F=fz||a.finals; if(!F) return '';
+    const W=F.winner, c=(F.closest||[])[0];
+    const chk = r => r ? Object.entries(r.checks).map(([n,v])=>`<span class="ck ${v?'ok':'no'}">${v?'✓':'✗'} ${({qualified:'qualified',profit:'in profit',consistent:'up most days',risk:'small worst day',trades:'3+ trades'})[n]}</span>`).join('') : '';
+    return `<div class="fin"><div class="fin-h">${a.meta.icon} <b>${esc(a.meta.title)}</b> ${fz?'<span class="px" style="font-size:8px;color:#ffcc33">FINAL</span>':''}</div>
+      ${W?`<div>${fz?'🏆 WINNER':'🥇 Would win now'}: <b data-k="${k}" data-n="${esc(W.name)}" style="cursor:pointer;text-decoration:underline">${esc(W.name)}</b> <span class="${cls(W.pnl)}">${money(W.pnl)}</span> ${W.beat_boss?'<span class="up">· beats the Boss</span>':'<span class="dn">· Boss is ahead</span>'}</div><div class="cks">${chk(W)}</div>`
+         :`<div class="mu">${fz?'No fighter passed every check: no winner.':'Nobody passes every check yet.'}</div>${c?`<div style="margin-top:4px">Closest: <b data-k="${k}" data-n="${esc(c.name)}" style="cursor:pointer;text-decoration:underline">${esc(c.name)}</b> <span class="${cls(c.pnl)}">${money(c.pnl)}</span></div><div class="cks">${chk(c)}</div>`:''}`}</div>`; };
+  return `<div class="finals"><div class="px" style="font-size:10px;color:#ffcc33;margin-bottom:8px">🏆 THE FINALS · a winner must pass every check (worst day better than −$${(D.arenas[D.order[0]].finals||{}).risk_limit||1000})</div>
+    <div class="fin-grid">${D.order.map(row).join('')}</div></div>`;
+}
 function towerView(){
-  const k=st.arena, a=A, m=M, T=TOWER[k]||TOWER.nq;
-  const live=m.live;
+  const k=st.arena, a=A, m=M, T=TOWER[k]||TOWER.nq, live=m.live;
   const inside=a.fighters.filter(f=>f.status==='active').sort((p,q)=>(q.pnl||0)-(p.pnl||0));
   const arriving=a.fighters.filter(f=>f.status==='entering');
   const L=inside.find(f=>f.name===m.leader);
   const rest=inside.filter(f=>f!==L);
-  const floors=[]; for(let i=0;i<rest.length;i+=4) floors.push(rest.slice(i,i+4));
-  const fl=floors.map((g,i)=>`<div class="floor"><div class="fnum px">${floors.length-i}</div><div class="desks">${g.map(f=>desk(f,live,m.leader)).join('')}</div></div>`);
+  const groups=[]; for(let i=0;i<rest.length;i+=4) groups.push(rest.slice(i,i+4));
   const graves=a.fighters.filter(f=>f.status==='ko');
+  const nDesk=inside.filter(f=>where(f,live)==='desk').length, nBed=inside.filter(f=>where(f,live)==='bed').length,
+        nLounge=inside.filter(f=>where(f,live)==='lounge').length, nPanic=inside.filter(f=>where(f,live)==='panic').length;
   return `<div class="tower-in" style="--c:${T.c};--g:${T.g}">
     <div class="tin-top"><button class="btn" data-go="city">← City</button>
       <div class="tin-name px">${m.icon} ${T.name}</div>
-      <div>${m.live?'<span class="pill live"><i></i>LIVE</span>':'<span class="pill closed">CLOSED · opens '+esc(m.next_open)+'</span>'}</div>
+      <div>${live?'<span class="pill live"><i></i>LIVE</span>':'<span class="pill closed">CLOSED · opens '+esc(m.next_open)+'</span>'}</div>
       <button class="btn" data-go="details">📋 Details & charts</button></div>
-    <div class="tin-grid"><div class="building">
-      <div class="penthouse"><div class="ph-t px">👑 PENTHOUSE</div>${L?desk(L,live,m.leader):`<div class="mu" style="padding:14px">The throne is empty. ${m.crown_needs_qual?'A qualified fighter must be in profit to move in.':'First fighter in profit moves in.'}</div>`}</div>
-      ${fl.join('')}
-      <div class="lobby"><div class="statue"><div class="ped">🗿</div><div><b>THE BOSS</b> · ${esc(a.boss.name)}<br><span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span> <span class="mu">(today ${money(a.boss.today)})</span></div></div>
+    ${countdown()}
+    <div class="census">💹 ${nDesk} trading · ☕ ${nLounge} waiting · 💦 ${nPanic} in the KO zone · 🛏 ${nBed} asleep · 🚪 ${arriving.length} arriving · ☠ ${graves.length} in the cemetery</div>
+    <div class="tin-grid"><div class="building2">
+      <div class="roof2"><span class="px">${T.name}</span></div>
+      ${L?apartment([L], 'P', live, m.leader, true):`<div class="apt pent empty2"><div class="fnum2 px">👑</div><div class="mu" style="padding:16px">The penthouse is empty. ${m.crown_needs_qual?'A qualified fighter in profit moves in here.':'The first fighter in profit moves in here.'}</div></div>`}
+      ${groups.map((g,i)=>apartment(g, groups.length-i, live, m.leader, false)).join('')}
+      <div class="lobby2"><div class="statue"><div class="ped">🗿</div><div><b>THE BOSS</b> · ${esc(a.boss.name)}<br><span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span> <span class="mu">(today ${money(a.boss.today)})</span></div></div>
+        <div class="elev"><span class="px" style="font-size:8px">🛗 ARRIVALS</span><div class="arr">${arriving.map(f=>`<div class="sp stand" data-n="${esc(f.name)}" style="position:relative;left:auto">${guy(f,'')}<i class="legs"><i></i><i></i></i><div class="tag2">${esc(f.name.slice(0,14))}</div></div>`).join('')||'<span class="mu" style="font-size:11px">nobody today</span>'}</div></div>
         <div class="mu" style="font-size:11.5px">Knockouts: <b style="color:#ff4d5e">${esc(m.ko_time)}</b> · bottom ${m.ko_per_day} go to the cemetery</div></div>
-      <div class="basement"><div class="ph-t px">🚇 THE TUNNEL · waiting to get in</div>
-        <div class="bench">${arriving.map(f=>`<div class="waiter" data-n="${esc(f.name)}">${guy(f,'entering')}<small>${esc(f.name)}</small><em>next session</em></div>`).join('')}
-        ${a.queue.slice(0,8).map(q=>`<div class="waiter q" title="${esc(q.about)}">${guy({name:q.name,cls:q.cls},'idle')}<small>${esc(q.name)}</small><em>${q.qual.ok?'★ qualified':'on the bench'}</em></div>`).join('')||''}</div></div>
+      <div class="basement"><div class="ph-t px">🚇 THE TUNNEL · challengers waiting for a seat</div>
+        <div class="bench">${a.queue.slice(0,10).map(q=>`<div class="waiter q" title="${esc(q.about)}">${guy({name:q.name,cls:q.cls},'idle')}<small>${esc(q.name)}</small><em>${q.qual.ok?'★ qualified':'on the bench'}</em></div>`).join('')}</div></div>
     </div>
     <div class="side">
       <div class="box"><h4 class="px">⚔ WHAT'S HAPPENING</h4><div class="feed" style="max-height:420px">${feedHTML(a.feed.slice(0,40))}</div></div>
       <div class="box" style="margin-top:12px"><h4 class="px">☠ CEMETERY</h4><div class="stones">${graves.map(f=>`<div class="stone" data-n="${esc(f.name)}" title="${money(f.pnl)}"><span>RIP</span><small>${esc(f.name.split(' ')[0])}</small></div>`).join('')||'<span class="mu">Nobody yet.</span>'}</div></div>
     </div></div></div>`;
 }
+setInterval(()=>{
+  document.querySelectorAll('#arena .sp.wander').forEach(sp=>{
+    if(Math.random()<0.45) return;
+    const [lo,hi]=(sp.dataset.range||'0,0').split(',').map(Number); if(hi<=lo) return;
+    const cur=parseFloat(sp.style.left)||lo; let nx=lo+Math.random()*(hi-lo);
+    if(Math.abs(nx-cur)<3) nx = cur>(lo+hi)/2 ? lo+Math.random()*3 : hi-Math.random()*3;
+    sp.classList.toggle('flip', nx<cur); sp.classList.add('walking'); sp.style.left=nx.toFixed(1)+'%';
+    clearTimeout(sp._t); sp._t=setTimeout(()=>sp.classList.remove('walking'), (parseFloat(sp.dataset.dur)||2.4)*1000);
+  });
+}, 1700);
+setInterval(tickCountdown, 1000);
+
 function render(){
   pick();
   if(st.view==='city' || st.view==='tower'){
     R.innerHTML = (st.view==='city'?cityView():towerView()) + `<div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
+    tickCountdown();
     return;
   }
   const tabs=[['arena','ARENA'],['board','STANDINGS'],['grave','GRAVEYARD'],['queue','CHALLENGERS'],['trophy','TROPHIES']];
@@ -571,6 +743,7 @@ if(D.reload){ setTimeout(()=>{ try{ if(!R.querySelector('.modal.on')) location.r
 """
 
 
-def render(states, order, reload_sec=None):
-    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec), default=str).replace("</", "<\\/")
+def render(states, order, reload_sec=None, final_at=None, frozen=None):
+    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec, final_at=final_at, frozen=frozen),
+                      default=str).replace("</", "<\\/")
     return CSS + '<div id="arena"></div>' + JS.replace("__DATA__", data)

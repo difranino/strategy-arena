@@ -6,5 +6,7 @@
   "ko_crypto": 3,
   "ko_hype": 1,
   "stock_size": 10000,
-  "crypto_size": 10000
+  "crypto_size": 10000,
+  "finals_at": "2026-10-16T21:00:00+01:00",
+  "repo": "difranino/strategy-arena"
 }

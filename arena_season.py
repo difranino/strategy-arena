@@ -309,7 +309,7 @@ def game_state(A, S):
                           stop=_f(o["stop"]), target=_f(o["target"]), upnl=_f(o["upnl"], 0),
                           since=_uk(o["entry_time"]).strftime("%a %H:%M"), why=w_in(o["asset"], o["side"], o["in_dec"])) for o in opens]
         days_in = len([d for d in S["done_days"] if j_ts is not None and d >= mm["joined"] and (mm["ko_day"] is None or d <= mm["ko_day"])])
-        fighters.append(dict(name=n, family=s["family"], cls=CLASS.get(s["family"], s["family"]), about=s["about"],
+        fighters.append(dict(**day_stats(spark), rules=rulebook(s, A), name=n, family=s["family"], cls=CLASS.get(s["family"], s["family"]), about=s["about"],
                              origin=mm["origin"], status=("entering" if pending else mm["status"]),
                              pnl=_f(pnl, 0), today=_f(today_pnl, 0), wins=wins, losses=losses, level=1 + days_in,
                              qualified=bool(mm["qual"]["ok"]), qual=mm["qual"], pos=pos, thought=thought, opens=open_list,
@@ -369,4 +369,72 @@ def game_state(A, S):
     fighters.sort(key=lambda f: ({"active": 0, "entering": 1, "ko": 2}[f["status"]], -(f["pnl"] or 0)))
     out = dict(meta=meta, fighters=fighters, boss=boss, feed=feed_out, queue=queue, trophies=S["trophies"], candles=candles)
     out.update({k: v for k, v in A.extra.items() if k in ("headlines", "reddit")})
+    out["finals"] = finals(out, A.crown_needs_qual)
     return out
+
+
+# ---------------------------------------------------------------- plain-English rulebook
+import re as _re
+
+
+def _plain(t):
+    if not t:
+        return ""
+    t = _re.sub(r"\{[^}]*\}", "…", t)
+    t = _re.sub(r"…\.", "…", t)
+    t = _re.sub(r"\(\s*…\s*\)", "", t)
+    t = _re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def rulebook(s, A):
+    assets = ", ".join(a.replace("-USD", "") for a in A.dfs)
+    out = [f"Trades: {assets} on 15-minute candles. {A.extra.get('sizing_text', '')}".strip()]
+    if s.get("why_l"):
+        out.append("Goes LONG when: " + _plain(s["why_l"]))
+    if s.get("why_s"):
+        out.append("Goes SHORT when: " + _plain(s["why_s"]))
+    if s.get("exit_l"):
+        out.append("Exits when: " + _plain(s["exit_l"]))
+    if s.get("stop"):
+        out.append(f"Protective stop: {s['stop']} × ATR(14) away from the entry price.")
+    if s.get("tp"):
+        out.append(f"Profit target: {s['tp']} × ATR(14) away from the entry price.")
+    if s.get("intraday"):
+        out.append("Always flat by the end of the session" + (" (midnight UK)." if A.market == "crypto" else " (closing bell)."))
+    else:
+        out.append("Can hold positions overnight.")
+    out.append("Decides at the close of each 15-minute candle and enters at the next candle's open. Can trade again whenever its setup shows up.")
+    if s.get("watch"):
+        out.append("While waiting it watches for: " + _plain(s["watch"]))
+    return out
+
+
+def day_stats(spark):
+    v = np.asarray(spark, float)
+    if len(v) < 2:
+        return dict(days_total=0, days_up=0, worst_day=0.0, max_dd=0.0)
+    d = np.diff(v)
+    dd = float(np.max(np.maximum.accumulate(v) - v))
+    return dict(days_total=int(len(d)), days_up=int((d > 0).sum()), worst_day=float(d.min()), max_dd=dd)
+
+
+FINAL_RISK_LIMIT = 1000.0  # worst single day must stay above -$1,000 (prop-firm style daily loss limit)
+
+
+def finals(state, crown_needs_qual=True):
+    """Who would win the league right now, and which checks each contender passes."""
+    rows = []
+    for f in state["fighters"]:
+        if f["status"] != "active":
+            continue
+        ch = dict(qualified=bool(f["qualified"] or not crown_needs_qual), profit=(f["pnl"] or 0) > 0,
+                  consistent=f["days_total"] > 0 and f["days_up"] / f["days_total"] >= 0.5,
+                  risk=f["worst_day"] > -FINAL_RISK_LIMIT, trades=(f["wins"] + f["losses"]) >= 3)
+        rows.append(dict(name=f["name"], pnl=f["pnl"], checks=ch, passed=all(ch.values()), n_ok=sum(ch.values()),
+                         beat_boss=(f["pnl"] or 0) > (state["boss"]["pnl"] or 0), days=f"{f['days_up']}/{f['days_total']}",
+                         worst_day=round(f["worst_day"]), max_dd=round(f["max_dd"])))
+    ok = sorted([r for r in rows if r["passed"]], key=lambda r: -(r["pnl"] or 0))
+    close = sorted([r for r in rows if not r["passed"]], key=lambda r: (-r["n_ok"], -(r["pnl"] or 0)))
+    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], risk_limit=FINAL_RISK_LIMIT,
+                needs_qual=crown_needs_qual)
