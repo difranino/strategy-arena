@@ -473,13 +473,13 @@ def exit_text(strat, side, reason, px, row):
     if reason == "flip":
         return f"Signal flipped the other way at {px:,.2f}."
     if reason == "daily_stop":
-        return f"Daily stop: down $600 on the day, so it went flat at {px:,.2f} and stopped for today."
+        return f"Daily stop: it hit its $600 daily loss limit, so it went flat at {px:,.2f} and stopped for today."
     if reason == "daily_goal":
         return f"Daily goal: +$1,500 on the day (a passing evaluation day), so it banked it at {px:,.2f}."
     if reason == "payday":
         return f"Payday goal reached, flat at {px:,.2f}."
     if reason == "blown":
-        return f"Account blown: the prop firm closed it at {px:,.2f} ($2,000 below its best balance)."
+        return f"Account blown at the close ({px:,.2f}): it lost $2,000 in the day or closed at/below $48,000."
     if reason == "passed":
         return f"Passed the evaluation: closed at {px:,.2f} before switching to the funded account."
     tmpl = strat.get("exit_l") if side > 0 else strat.get("exit_s")

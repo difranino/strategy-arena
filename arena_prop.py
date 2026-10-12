@@ -2,7 +2,7 @@
 # Every fighter trades its OWN prop-firm account:
 #   EVALUATION  pass with 2 days that each close at +$1,500 or more (they don't have to be in a row)
 #   FUNDED      a fresh $50,000 account after passing; the goal is at least $150 a day
-#   OUT         the moment the balance falls $2,000 below its highest balance (open trades included)
+#   OUT         checked at each day's close: a day that loses $2,000 or more, or a balance closing at/below $48,000
 # The bot's rules on top of the firm's rules:
 #   LOT SIZE    max 3 NQ minis, fewer when it's close to the $2,000 limit
 #   DAILY STOP  flat for the rest of the day after losing $600 in a day
@@ -11,7 +11,7 @@
 import numpy as np
 import pandas as pd
 
-PROP = dict(size=50000.0, dd=2000.0, eval_day=1500.0, eval_days=2, payday=150.0, daily_stop=600.0,
+PROP = dict(size=50000.0, dd=2000.0, rule="eod", eval_day=1500.0, eval_days=2, payday=150.0, daily_stop=600.0,
             max_lots=3, tiers=[(1500.0, 3), (1000.0, 2), (0.0, 1)], lock=False)
 
 
@@ -118,7 +118,7 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
             for p in by_entry.get(i, []):
                 if p["x"] is not None and p["x"] < i:
                     continue
-                room = last_bal - (peak - dd)
+                room = min(last_bal - (size - dd), dd + (last_bal - day_open))
                 p["k"] = lots_for(room, P)
                 if p["x"] == i:                                  # in and out on the same bar
                     realized += p["pnl1"] * p["k"]
@@ -127,21 +127,6 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
                 else:
                     open_.append(p)
         bal = size + realized + mtm(i) - ref
-        # the firm's rule: $2,000 below the highest balance = OUT
-        floor = peak - dd
-        if P.get("lock"):
-            floor = min(floor, size)
-        if bal <= floor:
-            for p in list(open_):
-                close_pos(p, i, c[i], "blown", i, True)
-                open_.remove(p)
-            bal = size + realized - ref
-            dead, dead_i, dead_day = True, i, d
-            eq[i] = realized
-            events.append(dict(t=idx[i], kind="loss", name=name, pnl=None,
-                               text=f"BLEW THE {'FUNDED' if phase == 'funded' else 'EVALUATION'} ACCOUNT: balance ${bal:,.0f} is $2,000+ below its best (${peak:,.0f}). OUT at the bell."))
-            last_bal = bal
-            continue
         peak = max(peak, bal)
         last_bal = bal
         eq[i] = realized + mtm(i)
@@ -178,6 +163,20 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
             dp = bal - day_open
             if not complete:
                 continue
+            # the firm's rules, checked at the close only: a -$2,000 day, or a close at/below start - $2,000
+            if dp <= -dd or bal <= size - dd:
+                for p in list(open_):
+                    close_pos(p, i, c[i], "blown", i, True)
+                    open_.remove(p)
+                bal = size + realized - ref
+                eq[i] = realized
+                last_bal = bal
+                dead, dead_i, dead_day = True, i, d
+                events.append(dict(t=idx[i], kind="loss", name=name, pnl=None,
+                                   text=(f"BLEW THE {'FUNDED' if phase == 'funded' else 'EVALUATION'} ACCOUNT at the close: "
+                                         + (f"lost ${-dp:,.0f} today (limit $2,000 in a day)." if dp <= -dd
+                                            else f"balance ${bal:,.0f} closed at or below ${size - dd:,.0f}.") + " OUT.")))
+                continue
             if phase == "eval":
                 if dp >= P["eval_day"]:
                     good_days += 1
@@ -204,9 +203,8 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
         bal, peak_now = size, size
     else:
         bal, peak_now = last_bal, peak
-    floor = peak_now - dd
-    if P.get("lock"):
-        floor = min(floor, size)
+    floor = size - dd
+    today_dp = 0.0 if (new_funded or bool(master["last"].values[n - 1])) else (bal - day_open)
     if phase == "funded" and not new_funded and not dead:
         today_dp = bal - day_open
         f_pnl = f_done + (today_dp if not bool(master["last"].values[i_last]) else 0.0)
@@ -214,7 +212,7 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
         f_pnl = f_done
     open_out = [dict(side=p["side"], entry=p["entry"], entry_i=p["e"], in_dec=p["in_dec"], lots=p["k"], stop=p.get("stop"),
                      target=p.get("tp"), upnl=p["side"] * (c[i_last] - p["entry"]) * pv * p["k"]) for p in open_]
-    info = dict(phase=phase, balance=round(bal), peak=round(peak_now), floor=round(floor), room=round(bal - floor),
+    info = dict(phase=phase, balance=round(bal), peak=round(peak_now), floor=round(floor), room=round(min(bal - floor, dd + today_dp)),
                 good_days=good_days, need_days=P["eval_days"], passes=passes, funded_days=f_days, paydays=int(f_paydays),
                 funded_pnl=round(f_pnl), funded_avg=round(f_done / f_days) if f_days else None, dead=dead,
                 dead_day=str(dead_day) if dead_day is not None else None, fresh=new_funded,
