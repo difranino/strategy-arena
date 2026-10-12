@@ -25,7 +25,8 @@ class Cfg:
 class Arena:
     """One league: its assets, fighters, challenger pool, benchmark ("the Boss"), sizing and rules."""
     def __init__(self, key, title, icon, dfs, master, roster, pool, bench, cfg, sizing, market="rth",
-                 crown_needs_qual=True, unit_label="", extra=None, pool_needs_qual=True, risk_limit=1000.0, monkeys=None):
+                 crown_needs_qual=True, unit_label="", extra=None, pool_needs_qual=True, risk_limit=1000.0, monkeys=None,
+                 prop=None):
         self.key, self.title, self.icon = key, title, icon
         self.dfs, self.master = dfs, master
         self.roster, self.pool, self.bench = roster, pool, bench
@@ -35,6 +36,7 @@ class Arena:
         self.pool_needs_qual = pool_needs_qual
         self.risk_limit = risk_limit
         self.monkeys = monkeys or []
+        self.prop = prop  # prop-firm account rules (dict) or None
 
 
 def _f(x, nd=2):
@@ -278,6 +280,14 @@ def game_state(A, S):
                 spark.append(round(float(eqs.values[S["sess_last_i"][d]]) - mm["base"], 0))
                 if pd.Timestamp(d) < m0:
                     pre_month = spark[-1]
+        prop = None
+        if A.prop and j_ts is not None:
+            ss = [(d, S["sess_first_i"][d], S["sess_last_i"][d], S["complete"][d]) for d in S["sessions"]
+                  if d >= mm["joined"] and (mm["ko_day"] is None or d <= mm["ko_day"])]
+            prop, pev = prop_account(eqs.values, ss, A.prop, m.index)
+            for e in pev:
+                e["name"] = n
+            feed += pev
         today_base = float(eqs.values[day_start_i - 1]) if day_start_i > 0 else 0.0
         if j_ts is not None and mm["joined"] == cur_day:
             today_base = mm["base"]
@@ -343,7 +353,7 @@ def game_state(A, S):
                              pnl=_f(pnl, 0), today=_f(today_pnl, 0), month=_f(pnl - pre_month, 0), wins=wins, losses=losses, level=1 + days_in,
                              qualified=bool(mm["qual"]["ok"]), qual=mm["qual"], pos=pos, thought=thought, opens=open_list,
                              spark=spark, marks=marks, trades=trades_list, joined=str(mm["joined"]) if mm["joined"] else None,
-                             ko_day=str(mm["ko_day"]) if mm["ko_day"] else None))
+                             ko_day=str(mm["ko_day"]) if mm["ko_day"] else None, prop=prop))
     act = [f for f in fighters if f["status"] == "active"]
     for f in fighters:
         sp = f["spark"]
@@ -408,9 +418,88 @@ def game_state(A, S):
                           p75=_f(float(np.percentile(mk, 75)), 0) if mk else None,
                           best=_f(max(mk), 0) if mk else None, worst=_f(min(mk), 0) if mk else None)
     out["meta"]["grace"] = cfg.grace
-    out["finals"] = finals(out, A.crown_needs_qual, A.risk_limit)
+    if A.prop:
+        ps = [f["prop"] for f in fighters if f["status"] == "active" and f.get("prop")]
+        out["prop"] = dict(rules=A.prop, n_eval=sum(p["phase"] == "eval" for p in ps), n_funded=sum(p["phase"] == "funded" for p in ps),
+                           resets=sum(p["resets"] for p in ps), passes=sum(p["passes"] for p in ps),
+                           best_funded=max(((f["name"], f["prop"]["funded_pnl"]) for f in fighters
+                                            if f["status"] == "active" and f.get("prop") and f["prop"]["funded_days"]),
+                                           key=lambda x: x[1], default=None))
+    out["finals"] = finals(out, A.crown_needs_qual, A.risk_limit, prop=bool(A.prop))
     return out
 
+
+
+# ---------------------------------------------------------------- prop-firm account
+PROP_DEFAULT = dict(size=50000.0, target=3000.0, dd=2000.0, payday=150.0, lock=False)
+
+
+def prop_account(eq, sessions, P, index):
+    """Runs one fighter's arena P&L through prop-firm rules.
+    eq: mark-to-market equity per bar. sessions: [(date, first_i, last_i)] it fought.
+    EVALUATION: start at size; pass when a day ends at size+target. FUNDED: a fresh account at size.
+    Either account is BLOWN the moment equity falls to (highest balance - dd); the floor stops rising at
+    the starting balance (lock). A blown account buys a new evaluation from the next session."""
+    size, target, dd, payday = P["size"], P["target"], P["dd"], P["payday"]
+    phase, need_new, ref, peak = "eval", True, 0.0, size
+    resets = passes = blown_funded = 0
+    f_days = f_paydays = 0
+    f_pnl = f_done = 0.0
+    events, last_day = [], None
+    bal = size
+    eval_start = None
+    for (d, i0, i1, done) in sessions:
+        if need_new:
+            ref = float(eq[i0 - 1]) if i0 > 0 else 0.0
+            peak, need_new = size, False
+            if phase == "eval":
+                eval_start = d
+        day_open = size + float(eq[i0 - 1] if i0 > 0 else 0.0) - ref
+        dead = False
+        for i in range(i0, i1 + 1):
+            b = size + float(eq[i]) - ref
+            peak = max(peak, b)
+            floor = peak - dd
+            if P.get("lock", True):
+                floor = min(floor, size)
+            if b <= floor:
+                events.append(dict(t=index[i], kind="loss", name=None, pnl=None,
+                                   text=(f"BLEW the {'FUNDED' if phase == 'funded' else 'evaluation'} account: balance ${b:,.0f} "
+                                         f"hit the ${dd:,.0f} drawdown limit (best was ${peak:,.0f}). Buying a new evaluation.")))
+                resets += 1
+                if phase == "funded":
+                    blown_funded += 1
+                    f_days += 1
+                    f_pnl += b - day_open
+                    f_done += b - day_open
+                phase, need_new, dead, bal = "eval", True, True, size
+                break
+            bal = b
+        last_day = d
+        if dead:
+            continue
+        if phase == "funded":
+            day = bal - day_open
+            f_pnl += day
+            if done:  # only finished days count towards the $150/day goal
+                f_days += 1
+                f_done += day
+                f_paydays += day >= payday
+        elif done and bal >= size + target:
+            passes += 1
+            events.append(dict(t=index[i1], kind="trophy", name=None, pnl=None,
+                               text=f"PASSED the prop evaluation at ${bal:,.0f}! Gets a FUNDED ${size:,.0f} account from the next session."))
+            phase, need_new, bal = "funded", True, size
+    if need_new:
+        bal, peak = size, size
+    floor = min(peak - dd, size) if P.get("lock", True) else peak - dd
+    out = dict(phase=phase, balance=round(bal), peak=round(peak), floor=round(floor), room=round(bal - floor),
+               to_target=round(max(0.0, size + target - bal)) if phase == "eval" else 0,
+               resets=resets, passes=passes, blown_funded=blown_funded,
+               funded_days=f_days, paydays=f_paydays, funded_pnl=round(f_pnl),
+               funded_avg=round(f_done / f_days) if f_days else None, fresh=need_new,
+               eval_since=str(eval_start) if eval_start is not None else None)
+    return out, events
 
 # ---------------------------------------------------------------- plain-English rulebook
 import re as _re
@@ -461,7 +550,7 @@ def day_stats(spark):
 FINAL_RISK_LIMIT = 1000.0  # worst single day must stay above -$1,000 (prop-firm style daily loss limit)
 
 
-def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT):
+def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT, prop=False):
     """Who would win the league right now, and which checks each contender passes."""
     rows = []
     for f in state["fighters"]:
@@ -471,6 +560,9 @@ def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT):
                   consistent=f["days_total"] > 0 and f["days_up"] / f["days_total"] >= 0.5,
                   risk=f["worst_day"] > -risk_limit, trades=(f["wins"] + f["losses"]) >= 3,
                   monkeys=(state.get("monkeys", {}).get("p75") is None) or (f["pnl"] or 0) > state["monkeys"]["p75"])
+        if prop:
+            pr = f.get("prop") or {}
+            ch["funded"] = bool(pr.get("passes", 0) > 0)
         rows.append(dict(name=f["name"], pnl=f["pnl"], checks=ch, passed=all(ch.values()), n_ok=sum(ch.values()),
                          beat_boss=(f["pnl"] or 0) > (state["boss"]["pnl"] or 0), days=f"{f['days_up']}/{f['days_total']}",
                          worst_day=round(f["worst_day"]), max_dd=round(f["max_dd"])))
@@ -481,5 +573,5 @@ def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT):
     podium = sorted([r for r in rows if r["checks"]["profit"]], key=lambda r: (-r["n_ok"], -(r["pnl"] or 0)))[:3]
     for i, r in enumerate(podium):
         r["medal"] = i + 1
-    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], podium=podium, n_checks=6,
+    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], podium=podium, n_checks=7 if prop else 6,
                 risk_limit=risk_limit, needs_qual=crown_needs_qual)

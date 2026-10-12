@@ -319,6 +319,12 @@ CSS = r"""
 #arena .tin-top .btn{padding:6px 9px;font-size:11px}
 #arena .dk .scr{width:14px;height:11px;left:58%}#arena .sp.d0 .chip2,#arena .sp.d0 .tag2{left:-4px;transform:none}}
 #arena .stale{margin-bottom:10px;padding:10px 12px;border-radius:10px;background:#3a2408;border:1px solid #ffb02088;color:#ffd58a;font-size:12.5px}
+#arena .pt{font-size:9.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#aeb8d2}
+#arena .pt b{color:#e9eefb}#arena .pt.f{color:#7fd8ff}#arena .pt.e{color:#c9b8ff}#arena .pt-r{color:#ff9e5e}
+#arena .card .pt{font-size:11px;margin-top:8px;white-space:normal}
+#arena .propdesk{display:flex;gap:10px;align-items:center;font-size:12px;background:#0d1a2e;border:1px solid #3ea8ff55;border-radius:10px;padding:8px 10px}
+#arena .propdesk .ped{font-size:22px}
+#arena .fund2{position:absolute;bottom:100%;right:-10px;font-size:11px;margin-bottom:-2px}
 #arena .aptR{flex:1;min-width:0;display:flex;flex-direction:column}#arena .aptR>.rooms2{flex:0 0 auto}
 #arena .ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a3150;border-top:2px solid #2a3150}
 #arena .pent .ledger{grid-template-columns:1fr}
@@ -385,6 +391,23 @@ function stance(f){
   const m={long:'▲ LONG',short:'▼ SHORT',flat:'WAITING',waiting:'ENTERING',ko:'K.O.',multi:(f.opens||[]).length+' OPEN'};
   return `<span class="stance s-${f.pos}">${m[f.pos]||f.pos}</span>`;
 }
+function propTag(f, full){
+  const p=f.prop; if(!p) return '';
+  const rs = p.resets?` <span class="pt-r">🔁${p.resets}</span>`:'';
+  if(p.fresh) return `<div class="pt e">📝 NEW EVAL next session${rs}</div>`;
+  if(p.phase==='funded'){
+    const goal = p.funded_days?` · <span class="${p.paydays===p.funded_days?'up':'mu'}">${p.paydays}/${p.funded_days} days ≥$${D.arenas.nq.prop.rules.payday}</span>`:' · first funded day';
+    return `<div class="pt f">💼 FUNDED <b>${money(p.balance,false)}</b>${full?` · room $${p.room.toLocaleString('en-GB')}`:''}${goal}${rs}</div>`;
+  }
+  return `<div class="pt e">📝 EVAL <b>${money(p.balance,false)}</b> · needs <span class="up">+$${p.to_target.toLocaleString('en-GB')}</span>${full?` · room $${p.room.toLocaleString('en-GB')}`:''}${rs}</div>`;
+}
+function propDesk(a){
+  const P=a.prop; if(!P) return '';
+  const r=P.rules;
+  return `<div class="propdesk"><div class="ped">🏦</div><div><b>PROP FIRM DESK</b> · every bot has its own $${(r.size/1000)}k account<br>
+    <span class="mu">📝 ${P.n_eval} in evaluation · 💼 ${P.n_funded} funded · 🔁 ${P.resets} blown & restarted</span><br>
+    <span class="mu">Pass: reach $${(r.size+r.target).toLocaleString('en-GB')} · Blown: $${r.dd.toLocaleString('en-GB')} below best balance · Funded goal: $${r.payday}+/day</span></div></div>`;
+}
 function card(f){
   const col = COL[f.cls]||'#888';
   const w = Math.min(100, Math.abs(f.pnl||0)/maxAbs*100);
@@ -409,6 +432,7 @@ function card(f){
     <div class="row"><div><div class="pnl ${cls(f.pnl)}">${money(f.pnl)}</div><div class="mu" style="font-size:11px">today <span class="${cls(f.today)}">${money(f.today)}</span></div></div>
       <div style="text-align:right">${stance(f)}<div style="margin-top:6px">${spark(f.spark,90,24)}</div></div></div>
     <div class="bar"><i style="width:${w}%;background:${(f.pnl||0)>=0?'#2fe07a':'#ff4d5e'}"></i></div>
+    ${f.status==='active'?propTag(f,true):''}
     ${pos}
     <div class="bub">💭 ${esc(f.thought)}</div>
     <div class="tags">${tags.join('')}</div></div>`;
@@ -540,6 +564,7 @@ function view(){
       <li><b>As many trades as the setup allows:</b> after an exit, a fighter can go again whenever its setup shows up again. Every trade pays costs, so over-trading hurts.</li>
       <li><b>Fair knockouts:</b> at ${esc(M.ko_time)} up to ${M.ko_per_day} fighters are knocked out, the worst first, but only if they are losing overall <i>and</i> lost money over their last 3 sessions. Every fighter gets ${M.grace} sessions' grace before it can be knocked out.</li>
       <li><b>🐒 The Monkey team:</b> 20 monkeys trade at random with the same costs. A strategy that can't beat 75% of them is probably just lucky, so it can't win the Finals.</li>
+      ${A.prop?`<li><b>🏦 Prop firm:</b> every bot trades its own $${A.prop.rules.size.toLocaleString('en-GB')} account. <b>Evaluation:</b> pass by reaching $${(A.prop.rules.size+A.prop.rules.target).toLocaleString('en-GB')} at the end of a day. <b>Blown:</b> if the balance ever falls $${A.prop.rules.dd.toLocaleString('en-GB')} below its highest balance ${A.prop.rules.lock?`(the limit stops rising once it reaches $${A.prop.rules.size.toLocaleString('en-GB')})`:'(it trails every new high, including open trades)'}. A blown bot buys a new evaluation and starts again next session (🔁 counts the restarts). <b>Funded:</b> after passing it gets a fresh funded $${A.prop.rules.size.toLocaleString('en-GB')} account; the goal there is at least $${A.prop.rules.payday} a day. To win the Nasdaq finals a bot must also have passed the evaluation.</li>`:''}
       <li><b>🏆 Finals podium:</b> when the final bell rings, the best 3 fighters in profit make the podium (🥇🥈🥉) and are kept for paper trading. They are ranked by how many finals checks they pass, then by profit. 🥇 is a full champion only if it passes every check.</li>
       <li><b>New challengers:</b> empty seats go first to challengers that pass qualifying (last ${M.qual_sessions} sessions, at least 10 trades, profitable in both halves, profit factor ≥ 1.1). If not enough qualify, the best of the rest come in <i>on trial</i>.</li>
       <li><b>Comebacks:</b> knocked-out fighters return to the waiting room after 5 sessions and can fight their way back.</li>
@@ -611,7 +636,7 @@ function towerHTML(k, i){
     </div>
     <div class="tw-info"><b>${esc(m.title)}</b> <span class="dot ${m.live?'on':''}"></span>${m.live?'live':'closed'}<br>
       <span class="mu">${n} inside · ☠ ${ko} · Boss <span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span></span><br>
-      <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span></div>
+      <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span>${a.prop?`<br><span class="mu">💼 ${a.prop.n_funded} funded · 📝 ${a.prop.n_eval} in eval</span>`:''}</div>
   </div>`;
 }
 function cityMoney(){
@@ -687,7 +712,7 @@ function sprite(f, j, live, leader, roomX){
   else { x=roomX.lounge[0]+Math.random()*(roomX.lounge[1]-roomX.lounge[0]); kls='wander'; range=roomX.lounge.join(','); dur=2.4; }
   const chip = op.length ? `<span class="chip2 ${cls(op.reduce((a,o)=>a+(o.upnl||0),0))}">${op.length>1?op.length+' open ':''}${op.length===1?(op[0].side==='Long'?'▲ ':'▼ ')+esc(short(op[0].asset)):''} ${money(op.reduce((a,o)=>a+(o.upnl||0),0))}</span>` : '';
   const fx = (f.name===leader?'<span class="crown2">👑</span>':'') + (w==='panic'?'<span class="sweat2">💦</span>':'') + (w==='bed'?'<span class="zz2">z<small>z</small>z</span>':'')
-           + ((f.today||0)>0 && w!=='bed'?'<span class="cash2">💰</span>':'') + (f.immune?'<span class="new2">✨</span>':'');
+           + ((f.today||0)>0 && w!=='bed'?'<span class="cash2">💰</span>':'') + (f.immune?'<span class="new2">✨</span>':'') + (f.prop&&f.prop.phase==='funded'?'<span class="fund2">💼</span>':'');
   if(j%2) kls+=' alt';
   return `<div class="sp ${kls} w-${w}" data-n="${esc(f.name)}" data-range="${range}" data-dur="${dur}" style="left:${x}%;--dur:${dur}s">
     <div class="bub2"><b>${esc(f.name)}</b> <span class="${cls(f.pnl)}">${money(f.pnl)}</span> <span class="mu">· today</span> <span class="${cls(f.today)}">${money(f.today)}</span><br>${esc(f.thought)}</div>
@@ -708,7 +733,7 @@ function apartment(group, num, live, leader, penthouse){
   return `<div class="apt ${live?'day':'night'} ${penthouse?'pent':''}">
     <div class="fnum2 px">${penthouse?'👑':num}</div>
     <div class="aptR"><div class="rooms2">${furniture(live, danger, penthouse)}${group.map((f,j)=>sprite(f,j,live,leader,ROOMX)).join('')}</div>
-    <div class="ledger">${group.map(f=>`<div class="lg" data-n="${esc(f.name)}"><span class="lg-n">${esc(f.name)}</span><span class="lg-v"><b class="${cls(f.pnl)}">${money(f.pnl)}</b> <em>total</em> · <b class="${cls(f.today)}">${money(f.today)}</b> <em>today</em></span></div>`).join('')}</div></div></div>`;
+    <div class="ledger">${group.map(f=>`<div class="lg" data-n="${esc(f.name)}"><span class="lg-n">${esc(f.name)}</span><span class="lg-v"><b class="${cls(f.pnl)}">${money(f.pnl)}</b> <em>total</em> · <b class="${cls(f.today)}">${money(f.today)}</b> <em>today</em></span>${propTag(f,false)}</div>`).join('')}</div></div></div>`;
 }
 function countdown(){
   if(!D.final_at) return '';
@@ -723,7 +748,7 @@ function tickCountdown(){
 }
 function finalsPanel(){
   const fr = D.frozen;
-  const LBL = F => ({qualified:'passed the pre-season test',profit:'in profit',consistent:'up most days',risk:'worst day > −$'+F.risk_limit,trades:'3+ trades',monkeys:'beats 75% of monkeys'});
+  const LBL = F => ({qualified:'passed the pre-season test',profit:'in profit',consistent:'up most days',risk:'worst day > −$'+F.risk_limit,trades:'3+ trades',monkeys:'beats 75% of monkeys',funded:'passed the prop evaluation'});
   const row = k => { const a=D.arenas[k], fz=fr&&fr.leagues&&fr.leagues[k], F=fz||a.finals; if(!F) return '';
     const P = F.podium || [F.winner, ...(F.runners||[])].filter(Boolean);
     const M = ['🥇','🥈','🥉'], lb=LBL(F);
@@ -762,6 +787,7 @@ function towerView(){
       ${groups.map((g,i)=>apartment(g, groups.length-i, live, m.leader, false)).join('')}
       <div class="lobby2"><div class="statue"><div class="ped">🗿</div><div><b>THE BOSS</b> · ${esc(a.boss.name)}<br><span class="${cls(a.boss.pnl)}">${money(a.boss.pnl)}</span> <span class="mu">(today ${money(a.boss.today)})</span></div></div>
         <div class="cage"><div class="ped">🐒</div><div><b>MONKEY CAGE</b> · ${a.monkeys?a.monkeys.n:0} random traders<br><span class="mu">typical</span> <span class="${cls((a.monkeys||{}).median)}">${money((a.monkeys||{}).median)}</span> · <span class="mu">top 25%</span> <span class="${cls((a.monkeys||{}).p75)}">${money((a.monkeys||{}).p75)}</span></div></div>
+        ${propDesk(a)}
         <div class="elev"><span class="px" style="font-size:8px">🛗 ARRIVALS</span><div class="arr">${arriving.map(f=>`<div class="sp stand" data-n="${esc(f.name)}" style="position:relative;left:auto">${guy(f,'')}<i class="legs"><i></i><i></i></i><div class="tag2">${esc(f.name.slice(0,14))}</div></div>`).join('')||'<span class="mu" style="font-size:11px">nobody today</span>'}</div></div>
         <div class="mu" style="font-size:11.5px">Knockouts: <b style="color:#ff4d5e">${esc(m.ko_time)}</b> · bottom ${m.ko_per_day} go to the cemetery</div></div>
       <div class="basement"><div class="ph-t px">🚇 THE TUNNEL · challengers waiting for a seat</div>

@@ -84,10 +84,11 @@ def _prep(raw, market, now):
 class Settings:
     def __init__(self, **kw):
         self.__dict__.update(dict(nq_start="2026-10-07", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
-                                  ko_hype=1, nq_symbol="NQ=F", point_value=2.0, nq_cost=2.5, stock_size=10000.0,
+                                  ko_hype=1, nq_symbol="NQ=F", point_value=20.0, nq_contracts=3, nq_cost=14.0, stock_size=10000.0,
                                   stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
                                   finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena",
-                                  risk_limits={"nq": 750, "stocks": 1500, "crypto": 1000, "hype": 1500},
+                                  risk_limits={"nq": 2000, "stocks": 1500, "crypto": 1000, "hype": 1500},
+                                  prop={"nq": dict(size=50000.0, target=3000.0, dd=2000.0, payday=150.0, lock=False)},
                                   revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3))
         self.__dict__.update(kw)
 
@@ -111,9 +112,11 @@ def build_nq(st, folder, now, raw=None):
     df["asset"] = "NQ"
     A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, NQS.original_roster(), NQS.challenger_pool(),
                  NQS.benchmark(), SE.Cfg(st.nq_start, ko_per_day=st.ko_nq, grace=st.grace, revive=st.revive.get("nq")),
-                 dict(point_value=st.point_value, cost_rt=st.nq_cost), market="rth", unit_label="contract",
-                 risk_limit=st.risk_limits.get("nq", 1000), monkeys=NQS.monkeys(st.monkeys),
-                 extra=dict(sizing_text=f"1 MNQ contract (${st.point_value:g} per point), ${st.nq_cost:.2f} costs per round trip."))
+                 dict(point_value=st.point_value, cost_rt=st.nq_cost, contracts=st.nq_contracts), market="rth", unit_label="contract",
+                 risk_limit=st.risk_limits.get("nq", 1000), monkeys=NQS.monkeys(st.monkeys), prop=st.prop.get("nq"),
+                 extra=dict(sizing_text=(f"{st.nq_contracts} NQ mini contracts (${st.point_value:g} per point each = "
+                                         f"${st.point_value * st.nq_contracts:g} per point), ${st.nq_cost:g} costs per contract per round trip "
+                                         f"(${st.nq_cost * st.nq_contracts:g} per trade).")))
     return A
 
 
