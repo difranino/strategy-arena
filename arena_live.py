@@ -9,6 +9,7 @@ import arena_stocks as STK
 import arena_crypto as CRY
 import arena_social as SOC
 import arena_world as AW
+import arena_meme as MEME
 import arena_hub as H
 
 NY, UK = "America/New_York", "Europe/London"
@@ -223,8 +224,14 @@ def build_all(st, folder, now=None, which=("nq", "stocks", "crypto", "hype"), ca
     order = [k for k in ("nq", "stocks", "crypto", "hype") if k in cache]
     add_code_links(cache, os.environ.get("GITHUB_REPOSITORY") or getattr(st, "repo", None))
     frozen = freeze_finals(st, folder, now, cache)
+    meme = None
+    if folder and getattr(st, "meme", True):
+        try:
+            meme = MEME.view(MEME.update(folder))
+        except Exception as e:
+            errs.append(f"meme: {e}")
     return H.render(cache, order, reload_sec, final_at=getattr(st, "finals_at", None), frozen=frozen,
-                    built_at=pd.Timestamp.now(tz="UTC").isoformat()), cache, errs
+                    built_at=pd.Timestamp.now(tz="UTC").isoformat(), meme=meme), cache, errs
 
 
 def code_index():

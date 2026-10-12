@@ -327,6 +327,18 @@ CSS = r"""
 #arena .fund2{position:absolute;bottom:100%;right:-10px;font-size:11px;margin-bottom:-2px}
 #arena .pt.d{color:#ff6b7d}
 #arena .hof{border-color:#3ea8ff55}#arena .hof-r{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--ln)}
+#arena .meme-hero{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
+@media(max-width:900px){#arena .meme-hero{grid-template-columns:1fr}}
+#arena .mh-big{font-family:'Press Start 2P',monospace;font-size:clamp(20px,4vw,34px);margin:6px 0;text-shadow:0 0 10px currentColor}
+#arena .mts{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:1000px){#arena .mts{grid-template-columns:repeat(2,1fr)}}
+#arena .mt{background:#0c1124;border:1px solid var(--ln);border-radius:10px;padding:10px}
+#arena .mt-h{display:flex;gap:10px;align-items:center;font-size:12.5px}#arena .mt-h .guy{position:relative;left:auto;bottom:auto;flex:0 0 28px}
+#arena .mt-p{font-size:18px;font-weight:800;margin:6px 0}
+#arena .meme-hero a,#arena .mt a,#arena .two a{color:#9fdcff;text-decoration:none}
+#arena .meme-hero svg{max-width:100%;height:auto}#arena .meme-hero>*,#arena .two>*{min-width:0}
+#arena .memepos{overflow-x:auto}
+@media(max-width:700px){#arena .mts{grid-template-columns:1fr 1fr}#arena .mt{padding:8px}#arena .mt-p{font-size:15px}}
 #arena .aptR{flex:1;min-width:0;display:flex;flex-direction:column}#arena .aptR>.rooms2{flex:0 0 auto}
 #arena .ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a3150;border-top:2px solid #2a3150}
 #arena .pent .ledger{grid-template-columns:1fr}
@@ -652,6 +664,55 @@ function towerHTML(k, i){
       <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span>${a.prop?`<br><span class="mu">💼 ${a.prop.n_funded} funded · 📝 ${a.prop.n_eval} in eval</span>`:''}</div>
   </div>`;
 }
+// ======================= MEME COIN DEN (copy-trading tower) =======================
+function memeTowerHTML(){
+  const Z=D.meme; if(!Z) return '';
+  const lit=(Z.traders||[]).map(t=>`<i class="win ${t.open?'w-gold':t.pnl>0?'w-green':t.pnl<0?'w-pink':'w-on'}" title="${esc(t.name)} ${money(t.pnl)}"></i>`).join('')
+            + (Z.positions||[]).slice(0,11).map(p=>`<i class="win ${p.pnl>=0?'w-green':'w-pink'}" title="${esc(p.symbol)} ${money(p.pnl)}"></i>`).join('');
+  return `<div class="tw-wrap" data-meme="1">
+    <div class="neon" style="--c:#9dff3e">🐸 MEME COIN DEN</div>
+    <div class="tower" style="--c:#9dff3e;--g:#24440c;height:170px">
+      <i class="antenna on"></i>
+      <div class="bill">💰 account<br><b class="${cls(Z.pnl)}">${money(Z.equity,false)}</b></div>
+      <div class="wins">${lit}</div>
+      <div class="door"><span>24/7</span></div>
+    </div>
+    <div class="tw-info"><b>Meme Coins</b> <span class="dot on"></span>copying<br>
+      <span class="mu">5 traders copied · ${(Z.positions||[]).length} coins held</span><br>
+      <span class="mu">started $${Z.start_cash.toLocaleString('en-GB')} · <span class="${cls(Z.pnl)}">${money(Z.pnl)}</span></span></div>
+  </div>`;
+}
+function memeView(){
+  const Z=D.meme;
+  const traders=(Z.traders||[]).map(t=>`<div class="mt">
+      <div class="mt-h">${guy({name:t.name,cls:'Momentum'},'')}<div><b>${esc(t.name)}</b><br><a class="mu" href="https://solscan.io/account/${esc(t.wallet)}" target="_blank" rel="noopener">${esc(t.wallet.slice(0,4))}…${esc(t.wallet.slice(-4))} ↗</a></div></div>
+      <div class="mt-p ${cls(t.pnl)}">${money(t.pnl)}</div>
+      <div class="mu" style="font-size:11px">${t.copies} copied · ${t.wins}W–${t.losses}L · ${t.open} open<br>banked ${money(t.realized)} · open ${money(t.open_pnl)}</div></div>`).join('');
+  const pos=(Z.positions||[]).length?`<table><tr><th>Coin</th><th>Copied from</th><th>Value</th><th>P&amp;L</th><th>Since</th></tr>${Z.positions.map(p=>`<tr><td><a href="https://dexscreener.com/solana/${esc(p.mint)}" target="_blank" rel="noopener"><b>${esc(p.symbol)}</b> ↗</a></td><td>${esc(p.trader)}</td><td>${money(p.value,false)}</td><td class="${cls(p.pnl)}">${money(p.pnl)}</td><td class="mu">${esc(p.opened)}</td></tr>`).join('')}</table>`:'<div class="empty">No coins held right now. We buy when one of the 5 traders buys.</div>';
+  const R_=Z.rules||{};
+  return `<div class="tower-in" style="--c:#9dff3e;--g:#24440c">
+    <div class="tin-top"><button class="btn" data-go="city">← City</button><div class="tin-name px">🐸 MEME COIN DEN</div>
+      <div><span class="pill live"><i></i>24/7</span></div><span></span></div>
+    ${countdown()}
+    <div class="meme-hero">
+      <div class="box"><h4 class="px">💰 OUR COPY ACCOUNT (paper money)</h4>
+        <div class="mh-big ${cls(Z.pnl)}">${money(Z.equity,false)}</div>
+        <div class="mu">started with $${Z.start_cash.toLocaleString('en-GB')} on ${esc(Z.started||'')} · total <span class="${cls(Z.pnl)}">${money(Z.pnl)}</span> · last 24h <span class="${cls(Z.today)}">${money(Z.today)}</span> · cash ${money(Z.cash,false)}</div>
+        <div style="margin-top:8px">${spark((Z.curve||[]).map(v=>v-Z.start_cash),520,60)}</div>
+        <div class="mu" style="font-size:11px;margin-top:6px">Updated ${esc(Z.updated||'–')} UK${Z.status&&Z.status!=='OK'?` · ⚠ ${esc(Z.status)}`:''}</div></div>
+      <div class="box rules"><h4 class="px">📜 THE ONE STRATEGY</h4><ul>
+        <li>We copy the <b>top 5 traders of Kolscan's monthly memecoin leaderboard</b> (their public Solana wallets).</li>
+        <li><b>They buy → we buy</b> ${Math.round((R_.copy_pct||0.1)*100)}% of our account in the same coin. <b>They sell → we sell</b> the same share of it.</li>
+        <li>We ignore their tiny buys (under ${R_.min_sol||0.5} SOL or $50) and coins with less than $${(R_.min_liq||10000).toLocaleString('en-GB')} of liquidity.</li>
+        <li>Costs: ${((R_.fee||0.015)*100).toFixed(1)}% on every buy and sell. Paper money only: nothing is bought for real.</li>
+        <li><b>Honest delay:</b> the city checks every 15–30 minutes, so we buy and sell at the price when WE see it, not theirs. In memecoins that delay can cost a lot. This tower measures exactly how much.</li>
+      </ul></div>
+    </div>
+    <div class="box" style="margin-top:12px"><h4 class="px">👥 THE 5 TRADERS WE COPY · our profit from copying each one</h4><div class="mts">${traders}</div></div>
+    <div class="two" style="margin-top:12px"><div class="box"><h4 class="px">🪙 COINS WE HOLD</h4><div class="memepos">${pos}</div></div>
+      <div class="box"><h4 class="px">⚔ COPY LOG</h4><div class="feed" style="max-height:420px">${feedHTML(Z.feed||[])}</div></div></div>
+  </div>`;
+}
 function hallOfFame(){
   const fr=D.frozen; if(!fr||!fr.leagues) return '';
   const M=['🥇','🥈','🥉'];
@@ -699,7 +760,7 @@ function cityView(){
     <div style="position:relative;margin-top:10px">${countdown()}</div>
     ${billboard()}
     <div class="city-sub">Tap a tower to go inside. Lit windows are fighters: <i class="win w-gold"></i> in a trade · <i class="win w-green"></i> in profit · <i class="win w-pink"></i> losing · <i class="win w-red"></i> KO zone · <i class="win w-cyan"></i> arriving</div>
-    <div class="towers">${D.order.map(towerHTML).join('')}</div>
+    <div class="towers">${D.order.map(towerHTML).join('')}${memeTowerHTML()}</div>
     <div class="street"><div class="tape"><div class="tape-in">${tape||'<span>Quiet night in the city.</span>'}</div></div></div>
     ${finalsPanel()}
     ${hallOfFame()}
@@ -843,6 +904,12 @@ function stale(){
 }
 function render(){
   pick();
+  if(st.view==='meme' && !D.meme) st.view='city';
+  if(st.view==='meme'){
+    R.innerHTML = stale() + memeView() + `<div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
+    tickCountdown();
+    return;
+  }
   if(st.view==='city' || st.view==='tower'){
     R.innerHTML = stale() + (st.view==='city'?cityView():towerView()) + `<div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
     tickCountdown();
@@ -864,6 +931,7 @@ function render(){
   <div class="modal"><div class="mc"><span class="x-btn">✕ close</span><div id="mbody"></div></div></div>`;
 }
 R.addEventListener('click', e=>{
+  const mm=e.target.closest('[data-meme]'); if(mm){st.view='meme'; save(); render(); R.scrollIntoView({block:'start'}); return;}
   const tw=e.target.closest('[data-tower]'); if(tw){st.arena=tw.dataset.tower; st.view='tower'; save(); render(); R.scrollIntoView({block:'start'}); return;}
   const go=e.target.closest('[data-go]'); if(go){st.view=go.dataset.go; save(); render(); return;}
   const ar=e.target.closest('[data-arena]'); if(ar){st.arena=ar.dataset.arena; save(); render(); return;}
@@ -881,7 +949,7 @@ if(D.reload){ setTimeout(()=>{ try{ if(!R.querySelector('.modal.on')) location.r
 """
 
 
-def render(states, order, reload_sec=None, final_at=None, frozen=None, built_at=None):
-    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec, final_at=final_at, frozen=frozen, built_at=built_at),
+def render(states, order, reload_sec=None, final_at=None, frozen=None, built_at=None, meme=None):
+    data = json.dumps(dict(arenas=states, order=order, reload=reload_sec, final_at=final_at, frozen=frozen, built_at=built_at, meme=meme),
                       default=str).replace("</", "<\\/")
     return CSS + '<div id="arena"></div>' + JS.replace("__DATA__", data)
