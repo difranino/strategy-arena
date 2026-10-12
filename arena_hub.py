@@ -319,6 +319,36 @@ CSS = r"""
 #arena .tin-top .btn{padding:6px 9px;font-size:11px}
 #arena .dk .scr{width:14px;height:11px;left:58%}#arena .sp.d0 .chip2,#arena .sp.d0 .tag2{left:-4px;transform:none}}
 #arena .stale{margin-bottom:10px;padding:10px 12px;border-radius:10px;background:#3a2408;border:1px solid #ffb02088;color:#ffd58a;font-size:12.5px}
+#arena .aptR{flex:1;min-width:0;display:flex;flex-direction:column}#arena .aptR>.rooms2{flex:0 0 auto}
+#arena .ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a3150;border-top:2px solid #2a3150}
+#arena .pent .ledger{grid-template-columns:1fr}
+#arena .lg{background:#090d1c;padding:4px 6px;font-size:10.5px;line-height:1.3;cursor:pointer;min-width:0}
+#arena .lg:hover{background:#121a33}
+#arena .lg-n{display:block;color:#cfd7ea;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#arena .lg-v{white-space:nowrap}#arena .lg-v em{font-style:normal;color:#6f7b98;font-size:9.5px}
+#arena .tsq{position:relative;margin:4px auto 16px;max-width:760px;padding:14px 14px 10px;border-radius:10px;background:#07060d;border:6px solid #1c1830;
+  box-shadow:0 0 0 2px #3a2f5c,0 0 40px -6px #ff3ea5,0 0 60px -12px #3ef0ff;overflow:hidden}
+#arena .tsq .bulbs{position:absolute;inset:2px;border:3px dotted #ffd84a;border-radius:6px;opacity:.55;pointer-events:none;animation:blink 1.4s steps(2) infinite}
+#arena .bb-h{text-align:center;font-size:9px;color:#ff7ac8;text-shadow:0 0 8px #ff3ea5;margin-bottom:10px;letter-spacing:.06em}
+#arena .bb-screens{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#arena .bb-s{text-align:center;padding:12px 8px;border-radius:6px;background:#020305;border:2px solid #1d2238;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.2px);background-size:4px 4px}
+#arena .bb-l{font-size:9px;color:#8fa0c8;margin-bottom:8px}
+#arena .led{display:block;font-family:'Press Start 2P',monospace;font-size:clamp(18px,4.6vw,34px);color:#e8ecff;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-shadow:0 0 10px currentColor}
+#arena .led.g{color:#2fff8a}#arena .led.r{color:#ff4d6a}
+#arena .bb-per{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin:10px 0 6px;font-size:11.5px;color:#cfd7ea}
+#arena .bb-t i{font-style:normal;font-weight:800}#arena .bb-t em{font-style:normal;color:#8592b0}
+#arena .bb-crawl{overflow:hidden;white-space:nowrap;border-top:1px solid #241f3a;border-bottom:1px solid #241f3a;padding:5px 0;font-family:'Press Start 2P',monospace;font-size:9px;color:#ffd84a}
+#arena .bb-in{display:inline-block;animation:crawl 40s linear infinite}
+#arena .bb-in span{padding:0 6px}#arena .bb-in .sep{color:#ff3ea5}
+@keyframes crawl{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+#arena .bb-note{font-size:10px;color:#6f7b98;text-align:center;margin-top:6px}
+#arena .pod{background:#0f1530;border:1px solid var(--ln);border-radius:8px;padding:6px 8px;margin-top:5px}
+#arena .pod.p1{border-color:#ffcc3388;background:linear-gradient(90deg,#2a2208,#0f1530)}
+#arena .pod-l{display:flex;gap:6px;align-items:center;min-width:0}#arena .pod-l b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#arena .medal{font-size:16px}#arena .lnk{cursor:pointer;text-decoration:underline}
+#arena .pod-r{margin:2px 0 0 28px;font-size:11.5px}#arena .okn{font-size:10.5px;color:#8592b0}#arena .okn.all{color:#2fe07a}
+@media(max-width:700px){#arena .ledger{grid-template-columns:1fr 1fr}#arena .tsq{padding:12px 8px 8px;border-width:4px}#arena .bb-screens{gap:8px}#arena .bb-h{font-size:7.5px}#arena .bb-l{font-size:7.5px}#arena .bb-per{font-size:10.5px}}
 #arena .rulebook{background:#0d1426;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;margin:8px 0 14px;font-size:12.5px}
 #arena .rulebook li{margin:4px 0}
 </style>
@@ -510,6 +540,7 @@ function view(){
       <li><b>As many trades as the setup allows:</b> after an exit, a fighter can go again whenever its setup shows up again. Every trade pays costs, so over-trading hurts.</li>
       <li><b>Fair knockouts:</b> at ${esc(M.ko_time)} up to ${M.ko_per_day} fighters are knocked out, the worst first, but only if they are losing overall <i>and</i> lost money over their last 3 sessions. Every fighter gets ${M.grace} sessions' grace before it can be knocked out.</li>
       <li><b>🐒 The Monkey team:</b> 20 monkeys trade at random with the same costs. A strategy that can't beat 75% of them is probably just lucky, so it can't win the Finals.</li>
+      <li><b>🏆 Finals podium:</b> when the final bell rings, the best 3 fighters in profit make the podium (🥇🥈🥉) and are kept for paper trading. They are ranked by how many finals checks they pass, then by profit. 🥇 is a full champion only if it passes every check.</li>
       <li><b>New challengers:</b> empty seats go first to challengers that pass qualifying (last ${M.qual_sessions} sessions, at least 10 trades, profitable in both halves, profit factor ≥ 1.1). If not enough qualify, the best of the rest come in <i>on trial</i>.</li>
       <li><b>Comebacks:</b> knocked-out fighters return to the waiting room after 5 sessions and can fight their way back.</li>
       <li><b>Leader 👑:</b> ${M.crown_needs_qual?'the qualified fighter with the highest arena P&amp;L.':'social data has no long history to qualify on yet, so the crown is provisional: the best fighter in profit.'}</li>
@@ -583,6 +614,32 @@ function towerHTML(k, i){
       <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span></div>
   </div>`;
 }
+function cityMoney(){
+  const out={today:0, month:0, per:[], best:null, worst:null};
+  D.order.forEach(k=>{ const a=D.arenas[k]; const act=a.fighters.filter(f=>f.status==='active');
+    const t=act.reduce((s,f)=>s+(f.today||0),0), m=act.reduce((s,f)=>s+(f.month!=null?f.month:(f.pnl||0)),0);
+    out.today+=t; out.month+=m; out.per.push({k, a, t, m, n:act.length});
+    act.forEach(f=>{ if(!out.best||(f.today||0)>(out.best.f.today||0)) out.best={f,k}; if(!out.worst||(f.today||0)<(out.worst.f.today||0)) out.worst={f,k}; }); });
+  return out;
+}
+function billboard(){
+  const C=cityMoney(), mon=new Date().toLocaleString('en-GB',{month:'long'}).toUpperCase();
+  const big = x => `<b class="led ${x>0?'g':x<0?'r':''}">${money(x)}</b>`;
+  const per = C.per.map(p=>`<span class="bb-t">${p.a.meta.icon} ${esc((TOWER[p.k]||{}).name||p.a.meta.title)} <i class="${cls(p.t)}">${money(p.t)}</i> <em>· ${mon.slice(0,3)} <i class="${cls(p.m)}">${money(p.m)}</i></em></span>`).join('');
+  const crawl = [C.best&&`🔥 TOP EARNER TODAY: ${C.best.f.name} ${money(C.best.f.today)}`, C.worst&&(C.worst.f.today||0)<0&&`🧊 ROUGHEST DAY: ${C.worst.f.name} ${money(C.worst.f.today)}`,
+                 ...C.per.map(p=>`${p.a.meta.icon} ${p.a.meta.title.toUpperCase()}: ${p.n} BOTS · TODAY ${money(p.t)} · ${mon} ${money(p.m)}`)].filter(Boolean)
+                 .map(x=>`<span>${esc(x)}</span>`).join('<span class="sep">★</span>');
+  return `<div class="tsq"><i class="bulbs"></i>
+    <div class="bb-h px">📺 STRATEGY CITY SQUARE · ALL BOTS COMBINED</div>
+    <div class="bb-screens">
+      <div class="bb-s"><div class="bb-l px">TODAY</div>${big(C.today)}</div>
+      <div class="bb-s"><div class="bb-l px">${mon}</div>${big(C.month)}</div>
+    </div>
+    <div class="bb-per">${per}</div>
+    <div class="bb-crawl"><div class="bb-in">${crawl}${crawl?'<span class="sep">★</span>'+crawl:''}</div></div>
+    <div class="bb-note">Adds up every bot still in the game (dead ones don't count). Each bot trades its own small size, so this is the whole city's paper profit.</div>
+  </div>`;
+}
 function cityView(){
   const stars=Array.from({length:70},(_,i)=>`<i class="star" style="left:${((i*61.803)%100).toFixed(1)}%;top:${((i*37.17+i*i*0.7)%55).toFixed(1)}%;animation-delay:${(i%7)/2}s"></i>`).join('');
   const feed=D.order.flatMap(k=>D.arenas[k].feed.slice(0,8).map(e=>({...e,k}))).slice(0,30);
@@ -592,6 +649,7 @@ function cityView(){
     <div class="sky">${stars}<i class="moon"></i><div class="far"></div></div>
     <div class="city-title px">STRATEGY CITY</div>
     <div style="position:relative;margin-top:10px">${countdown()}</div>
+    ${billboard()}
     <div class="city-sub">Tap a tower to go inside. Lit windows are fighters: <i class="win w-gold"></i> in a trade · <i class="win w-green"></i> in profit · <i class="win w-pink"></i> losing · <i class="win w-red"></i> KO zone · <i class="win w-cyan"></i> arriving</div>
     <div class="towers">${D.order.map(towerHTML).join('')}</div>
     <div class="street"><div class="tape"><div class="tape-in">${tape||'<span>Quiet night in the city.</span>'}</div></div></div>
@@ -632,7 +690,7 @@ function sprite(f, j, live, leader, roomX){
            + ((f.today||0)>0 && w!=='bed'?'<span class="cash2">💰</span>':'') + (f.immune?'<span class="new2">✨</span>':'');
   if(j%2) kls+=' alt';
   return `<div class="sp ${kls} w-${w}" data-n="${esc(f.name)}" data-range="${range}" data-dur="${dur}" style="left:${x}%;--dur:${dur}s">
-    <div class="bub2"><b>${esc(f.name)}</b> <span class="${cls(f.pnl)}">${money(f.pnl)}</span><br>${esc(f.thought)}</div>
+    <div class="bub2"><b>${esc(f.name)}</b> <span class="${cls(f.pnl)}">${money(f.pnl)}</span> <span class="mu">· today</span> <span class="${cls(f.today)}">${money(f.today)}</span><br>${esc(f.thought)}</div>
     <div class="tag2 ${cls(f.pnl)}">${esc(f.name.length>16?f.name.slice(0,15)+'…':f.name)}</div>${chip}${fx}
     ${guy(f, '')}<i class="legs"><i></i><i></i></i></div>`;
 }
@@ -649,7 +707,8 @@ function apartment(group, num, live, leader, penthouse){
   const danger=group.some(f=>f.danger);
   return `<div class="apt ${live?'day':'night'} ${penthouse?'pent':''}">
     <div class="fnum2 px">${penthouse?'👑':num}</div>
-    <div class="rooms2">${furniture(live, danger, penthouse)}${group.map((f,j)=>sprite(f,j,live,leader,ROOMX)).join('')}</div></div>`;
+    <div class="aptR"><div class="rooms2">${furniture(live, danger, penthouse)}${group.map((f,j)=>sprite(f,j,live,leader,ROOMX)).join('')}</div>
+    <div class="ledger">${group.map(f=>`<div class="lg" data-n="${esc(f.name)}"><span class="lg-n">${esc(f.name)}</span><span class="lg-v"><b class="${cls(f.pnl)}">${money(f.pnl)}</b> <em>total</em> · <b class="${cls(f.today)}">${money(f.today)}</b> <em>today</em></span></div>`).join('')}</div></div></div>`;
 }
 function countdown(){
   if(!D.final_at) return '';
@@ -664,13 +723,20 @@ function tickCountdown(){
 }
 function finalsPanel(){
   const fr = D.frozen;
+  const LBL = F => ({qualified:'passed the pre-season test',profit:'in profit',consistent:'up most days',risk:'worst day > −$'+F.risk_limit,trades:'3+ trades',monkeys:'beats 75% of monkeys'});
   const row = k => { const a=D.arenas[k], fz=fr&&fr.leagues&&fr.leagues[k], F=fz||a.finals; if(!F) return '';
-    const W=F.winner, c=(F.closest||[])[0];
-    const chk = r => r ? Object.entries(r.checks).map(([n,v])=>`<span class="ck ${v?'ok':'no'}">${v?'✓':'✗'} ${({qualified:'qualified',profit:'in profit',consistent:'up most days',risk:'worst day > −$'+F.risk_limit,trades:'3+ trades',monkeys:'beats 75% of monkeys'})[n]}</span>`).join('') : '';
-    return `<div class="fin"><div class="fin-h">${a.meta.icon} <b>${esc(a.meta.title)}</b> ${fz?'<span class="px" style="font-size:8px;color:#ffcc33">FINAL</span>':''}</div>
-      ${W?`<div>${fz?'🏆 WINNER':'🥇 Would win now'}: <b data-k="${k}" data-n="${esc(W.name)}" style="cursor:pointer;text-decoration:underline">${esc(W.name)}</b> <span class="${cls(W.pnl)}">${money(W.pnl)}</span> ${W.beat_boss?'<span class="up">· beats the Boss</span>':'<span class="dn">· Boss is ahead</span>'}</div><div class="cks">${chk(W)}</div>`
-         :`<div class="mu">${fz?'No fighter passed every check: no winner.':'Nobody passes every check yet.'}</div>${c?`<div style="margin-top:4px">Closest: <b data-k="${k}" data-n="${esc(c.name)}" style="cursor:pointer;text-decoration:underline">${esc(c.name)}</b> <span class="${cls(c.pnl)}">${money(c.pnl)}</span></div><div class="cks">${chk(c)}</div>`:''}`}</div>`; };
-  return `<div class="finals"><div class="px" style="font-size:10px;color:#ffcc33;margin-bottom:8px">🏆 THE FINALS · a winner must pass every check, including beating the 🐒 monkeys</div>
+    const P = F.podium || [F.winner, ...(F.runners||[])].filter(Boolean);
+    const M = ['🥇','🥈','🥉'], lb=LBL(F);
+    const chk = r => Object.entries(r.checks).map(([n,v])=>`<span class="ck ${v?'ok':'no'}">${v?'✓':'✗'} ${lb[n]}</span>`).join('');
+    const steps = P.map((r,i)=>`<div class="pod p${i+1}">
+        <div class="pod-l"><span class="medal">${M[i]}</span><b data-k="${k}" data-n="${esc(r.name)}" class="lnk">${esc(r.name)}</b></div>
+        <div class="pod-r"><span class="${cls(r.pnl)}">${money(r.pnl)}</span> <span class="okn ${r.passed?'all':''}">${r.passed?'✅ all checks':r.n_ok+'/'+(F.n_checks||6)+' checks'}</span></div>
+        ${i===0?`<div class="cks">${chk(r)}</div>`:''}</div>`).join('');
+    const champ = P[0] && P[0].passed;
+    return `<div class="fin"><div class="fin-h">${a.meta.icon} <b>${esc(a.meta.title)}</b> ${fz?'<span class="px" style="font-size:8px;color:#ffcc33">FINAL</span>':'<span class="mu" style="font-size:10.5px">· if it ended now</span>'}</div>
+      ${P.length?steps:`<div class="mu">${fz?'Nobody finished in profit: empty podium.':'Nobody is in profit yet.'}</div>`}
+      ${P.length?`<div class="mu" style="font-size:10.5px;margin-top:6px">${champ?(fz?'🏆 Champion passed every check.':'🏆 #1 passes every check right now.'):(fz?'No one passed every check, so no full champion. The 3 above are still kept.':'#1 still needs to pass every check to be a full champion.')}</div>`:''}</div>`; };
+  return `<div class="finals"><div class="px" style="font-size:10px;color:#ffcc33;margin-bottom:8px;line-height:1.6">🏆 THE FINALS · the best 3 in each tower make the podium and get kept · ✅ = passed every check, including beating the 🐒 monkeys</div>
     <div class="fin-grid">${D.order.map(row).join('')}</div></div>`;
 }
 function towerView(){

@@ -269,11 +269,15 @@ def game_state(A, S):
             tt = tt[tt.exit_time < pd.Timestamp(mm["ko_day"]).tz_localize(m.index.tz) + pd.Timedelta(days=1)]
         wins, losses = int((tt.pnl > 0).sum()), int((tt.pnl <= 0).sum())
         spark = [0.0]
+        pre_month = 0.0  # profit already banked before this calendar month started
+        m0 = pd.Timestamp(cur_day).replace(day=1)
         if j_ts is not None:
             for d in S["sessions"]:
                 if d < mm["joined"] or (mm["ko_day"] is not None and d > mm["ko_day"]):
                     continue
                 spark.append(round(float(eqs.values[S["sess_last_i"][d]]) - mm["base"], 0))
+                if pd.Timestamp(d) < m0:
+                    pre_month = spark[-1]
         today_base = float(eqs.values[day_start_i - 1]) if day_start_i > 0 else 0.0
         if j_ts is not None and mm["joined"] == cur_day:
             today_base = mm["base"]
@@ -336,7 +340,7 @@ def game_state(A, S):
         days_in = len([d for d in S["done_days"] if j_ts is not None and d >= mm["joined"] and (mm["ko_day"] is None or d <= mm["ko_day"])])
         fighters.append(dict(**day_stats(spark), rules=rulebook(s, A), name=n, family=s["family"], cls=CLASS.get(s["family"], s["family"]), about=s["about"],
                              origin=mm["origin"], status=("entering" if pending else mm["status"]),
-                             pnl=_f(pnl, 0), today=_f(today_pnl, 0), wins=wins, losses=losses, level=1 + days_in,
+                             pnl=_f(pnl, 0), today=_f(today_pnl, 0), month=_f(pnl - pre_month, 0), wins=wins, losses=losses, level=1 + days_in,
                              qualified=bool(mm["qual"]["ok"]), qual=mm["qual"], pos=pos, thought=thought, opens=open_list,
                              spark=spark, marks=marks, trades=trades_list, joined=str(mm["joined"]) if mm["joined"] else None,
                              ko_day=str(mm["ko_day"]) if mm["ko_day"] else None))
@@ -472,5 +476,10 @@ def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT):
                          worst_day=round(f["worst_day"]), max_dd=round(f["max_dd"])))
     ok = sorted([r for r in rows if r["passed"]], key=lambda r: -(r["pnl"] or 0))
     close = sorted([r for r in rows if not r["passed"]], key=lambda r: (-r["n_ok"], -(r["pnl"] or 0)))
-    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], risk_limit=risk_limit,
-                needs_qual=crown_needs_qual)
+    # PODIUM: the best 3 of each league are kept. Ranked by how many finals checks they pass, then by profit.
+    # Only fighters in profit can stand on it. Medal 1 is the champion only if it passes every check.
+    podium = sorted([r for r in rows if r["checks"]["profit"]], key=lambda r: (-r["n_ok"], -(r["pnl"] or 0)))[:3]
+    for i, r in enumerate(podium):
+        r["medal"] = i + 1
+    return dict(winner=ok[0] if ok else None, runners=ok[1:3], closest=close[:2], podium=podium, n_checks=6,
+                risk_limit=risk_limit, needs_qual=crown_needs_qual)
