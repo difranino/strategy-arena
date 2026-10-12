@@ -560,6 +560,10 @@ function view(){
   if(st.tab==='chatter'){
     const rb = (A.reddit||[]);
     const hl = (A.headlines||[]);
+    if(A.reddit===undefined){
+      return `<div class="box"><h4 class="px">🌍 WORLD NEWS & BIG NAMES</h4><div class="mu" style="font-size:11.5px;margin-bottom:6px">What the News fighters read: Trump, the Fed, world events and the big CEOs. Each headline only counts from the moment it was first seen.</div>${hl.length?hl.map(h=>`<div class="hl"><span class="mu">${esc(h.t)}</span><b>${esc(h.asset)}</b><span>${esc(h.title)}</span><b class="${cls(h.sent)}">${h.sent>0?'+':''}${h.sent}</b></div>`).join(''):'<div class="empty">No headlines yet. They build up every time the city updates.</div>'}
+        <div class="mu" style="font-size:11px;margin-top:8px">Mood score: −1 very negative … +1 very positive, from the headline wording.</div></div>`;
+    }
     return `<div class="two"><div class="box"><h4 class="px">👽 REDDIT RIGHT NOW</h4>
       ${rb.length?`<table><tr><th>#</th><th>Stock</th><th>Rank</th><th>Mentions</th><th>24h ago</th><th>Change</th></tr>${rb.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.asset)}</b></td><td>#${r.rank}</td><td>${r.mentions}</td><td>${r.prev??'–'}</td><td class="${cls((r.prev!=null)?r.mentions-r.prev:0)}">${r.prev?((r.mentions/r.prev-1)*100).toFixed(0)+'%':'–'}</td></tr>`).join('')}</table>`:'<div class="empty">No Reddit data yet. It builds up every time the hub runs.</div>'}</div>
       <div class="box"><h4 class="px">📰 LATEST HEADLINES</h4>${hl.length?hl.map(h=>`<div class="hl"><span class="mu">${esc(h.t)}</span><b>${esc(h.asset)}</b><span>${esc(h.title)}</span><b class="${cls(h.sent)}">${h.sent>0?'+':''}${h.sent}</b></div>`).join(''):'<div class="empty">No headlines yet.</div>'}
@@ -845,7 +849,7 @@ function render(){
     return;
   }
   const tabs=[['arena','ARENA'],['board','STANDINGS'],['grave','GRAVEYARD'],['queue','CHALLENGERS'],['trophy','TROPHIES']];
-  if(A.reddit!==undefined || A.headlines!==undefined) tabs.push(['chatter','CHATTER']);
+  if(A.reddit!==undefined || A.headlines!==undefined) tabs.push(['chatter', A.reddit===undefined?'WORLD NEWS':'CHATTER']);
   tabs.push(['rules','RULES']);
   if(!tabs.find(t=>t[0]===st.tab)) st.tab='arena';
   R.innerHTML = stale() + `

@@ -8,6 +8,7 @@ import arena_strats as NQS
 import arena_stocks as STK
 import arena_crypto as CRY
 import arena_social as SOC
+import arena_world as AW
 import arena_hub as H
 
 NY, UK = "America/New_York", "Europe/London"
@@ -90,7 +91,8 @@ class Settings:
                                   finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena",
                                   risk_limits={"nq": 2000, "stocks": 1500, "crypto": 1000, "hype": 1500},
                                   prop={"nq": dict(PR.PROP)},
-                                  revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3))
+                                  revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3,
+                                  news_join="2026-10-13"))
         self.__dict__.update(kw)
 
 
@@ -121,18 +123,25 @@ def build_nq(st, folder, now, raw=None):
     return A
 
 
-def build_stocks(st, folder, now, raws=None):
+def build_stocks(st, folder, now, raws=None, world=None):
     syms = STK.STOCKS + [STK.MARKET]
     raws = raws or load_symbols(syms, folder)
     dfs = {s: _prep(raws[s], "rth", now) for s in STK.STOCKS if s in raws}
     spy = _prep(raws[STK.MARKET], "rth", now)
     STK.add_market_cols(dfs, spy)
+    if world is None:
+        world = AW.fetch_world(folder)
+    AW.add_world_cols(dfs, world)
+    news_fighters = AW.roster()
+    for s_ in news_fighters:
+        s_["joins"] = getattr(st, "news_join", None)
     sizing = dict(notional=st.stock_size, cost_pct=st.stock_cost_pct)
-    A = SE.Arena("stocks", "Stocks", "📈", dfs, spy, STK.roster(), STK.pool(), STK.benchmark(),
+    A = SE.Arena("stocks", "Stocks", "📈", dfs, spy, STK.roster() + news_fighters, STK.pool(), STK.benchmark(),
                  SE.Cfg(st.new_start, ko_per_day=st.ko_stocks, grace=st.grace, revive=st.revive.get("stocks")), sizing,
                  market="rth", unit_label="stocks", risk_limit=st.risk_limits.get("stocks", 1000), monkeys=NQS.monkeys(st.monkeys),
                  extra=dict(sizing_text=f"${st.stock_size:,.0f} per position on any of the 9 stocks (long or short), "
-                                        f"{st.stock_cost_pct * 100:.2f}% costs per round trip."))
+                                        f"{st.stock_cost_pct * 100:.2f}% costs per round trip.",
+                            headlines=AW.latest_world(world, 30)))
     return A, dfs, spy
 
 
@@ -222,7 +231,7 @@ def code_index():
     """Where each fighter's rules live in the code, so the site can link straight to them."""
     import re
     idx = {}
-    for mod in (NQS, STK, CRY, SOC):
+    for mod in (NQS, STK, CRY, SOC, AW):
         path = mod.__file__
         for i, line in enumerate(open(path, encoding="utf-8")):
             m = re.search(r'S\("([^"]+)"', line)

@@ -155,9 +155,15 @@ def run_season(A, now=None):
                                            A.sizing["cost_rt"], A.sizing.get("contracts", 1))[0], index=m.index) for t in monkey_bt]
     for s in A.roster:
         n = s["name"]
-        members[n] = dict(name=n, origin="original", status="active", joined=first_day,
-                          base=eq_before(n, first_day) if season_on else float(eq[n].values[-1]),
-                          qual=qualify(n, first_day), ko_day=None, ko_pnl=None)
+        jd = first_day
+        if s.get("joins") and season_on:  # added mid-season: starts on its own date (waits in the lobby until then)
+            j0 = pd.Timestamp(s["joins"]).date()
+            if j0 > first_day:
+                later = [x for x in sessions if x >= j0]
+                jd = later[0] if later else None
+        members[n] = dict(name=n, origin="original", status="active", joined=jd,
+                          base=(eq_before(n, jd) if jd is not None else 0.0) if season_on else float(eq[n].values[-1]),
+                          qual=qualify(n, jd or first_day), ko_day=None, ko_pnl=None)
     bname = A.bench["name"]
     bench_base = eq_before(bname, first_day) if season_on else float(eq[bname].values[-1])
     used = set(members)
