@@ -472,6 +472,16 @@ def exit_text(strat, side, reason, px, row):
                 else f"Closing bell: closed at {px:,.2f}. It never holds overnight.")
     if reason == "flip":
         return f"Signal flipped the other way at {px:,.2f}."
+    if reason == "daily_stop":
+        return f"Daily stop: down $600 on the day, so it went flat at {px:,.2f} and stopped for today."
+    if reason == "daily_goal":
+        return f"Daily goal: +$1,500 on the day (a passing evaluation day), so it banked it at {px:,.2f}."
+    if reason == "payday":
+        return f"Payday goal reached, flat at {px:,.2f}."
+    if reason == "blown":
+        return f"Account blown: the prop firm closed it at {px:,.2f} ($2,000 below its best balance)."
+    if reason == "passed":
+        return f"Passed the evaluation: closed at {px:,.2f} before switching to the funded account."
     tmpl = strat.get("exit_l") if side > 0 else strat.get("exit_s")
     return say(tmpl, row, "") or "Its exit rule fired."
 

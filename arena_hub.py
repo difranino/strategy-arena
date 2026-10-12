@@ -325,6 +325,8 @@ CSS = r"""
 #arena .propdesk{display:flex;gap:10px;align-items:center;font-size:12px;background:#0d1a2e;border:1px solid #3ea8ff55;border-radius:10px;padding:8px 10px}
 #arena .propdesk .ped{font-size:22px}
 #arena .fund2{position:absolute;bottom:100%;right:-10px;font-size:11px;margin-bottom:-2px}
+#arena .pt.d{color:#ff6b7d}
+#arena .hof{border-color:#3ea8ff55}#arena .hof-r{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--ln)}
 #arena .aptR{flex:1;min-width:0;display:flex;flex-direction:column}#arena .aptR>.rooms2{flex:0 0 auto}
 #arena .ledger{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a3150;border-top:2px solid #2a3150}
 #arena .pent .ledger{grid-template-columns:1fr}
@@ -393,20 +395,26 @@ function stance(f){
 }
 function propTag(f, full){
   const p=f.prop; if(!p) return '';
-  const rs = p.resets?` <span class="pt-r">🔁${p.resets}</span>`:'';
-  if(p.fresh) return `<div class="pt e">📝 NEW EVAL next session${rs}</div>`;
+  const R=(D.arenas.nq&&D.arenas.nq.prop||{}).rules||{payday:150};
+  const k = full?` · <span class="mu">${p.lots_now} lot${p.lots_now>1?'s':''} next trade</span>`:'';
+  const room = full?` · room <b>$${p.room.toLocaleString('en-GB')}</b>`:'';
+  if(p.dead) return `<div class="pt d">💀 BLOWN · out at the bell</div>`;
+  const halt = p.halted?` <span class="pt-r">⏸ done for today</span>`:'';
   if(p.phase==='funded'){
-    const goal = p.funded_days?` · <span class="${p.paydays===p.funded_days?'up':'mu'}">${p.paydays}/${p.funded_days} days ≥$${D.arenas.nq.prop.rules.payday}</span>`:' · first funded day';
-    return `<div class="pt f">💼 FUNDED <b>${money(p.balance,false)}</b>${full?` · room $${p.room.toLocaleString('en-GB')}`:''}${goal}${rs}</div>`;
+    const goal = p.funded_days?` · <span class="${p.paydays===p.funded_days?'up':'mu'}">${p.paydays}/${p.funded_days} days ≥$${R.payday}</span>`:' · first funded day';
+    const wi = full&&p.whatif_days?`<div class="mu" style="font-size:10.5px">If it stopped at +$${R.payday}: ${p.whatif_paydays}/${p.whatif_days} days ≥$${R.payday}</div>`:'';
+    return `<div class="pt f">💼 FUNDED <b>${money(p.balance,false)}</b>${goal}${room}${k}${halt}</div>${wi}`;
   }
-  return `<div class="pt e">📝 EVAL <b>${money(p.balance,false)}</b> · needs <span class="up">+$${p.to_target.toLocaleString('en-GB')}</span>${full?` · room $${p.room.toLocaleString('en-GB')}`:''}${rs}</div>`;
+  const dots = `<span class="${p.good_days?'up':''}">${p.good_days}/${p.need_days} days</span>`;
+  return `<div class="pt e">📝 EVAL ${dots} · <b>${money(p.balance,false)}</b>${room}${k}${halt}</div>`;
 }
 function propDesk(a){
   const P=a.prop; if(!P) return '';
-  const r=P.rules;
+  const r=P.rules, B=P.boss;
   return `<div class="propdesk"><div class="ped">🏦</div><div><b>PROP FIRM DESK</b> · every bot has its own $${(r.size/1000)}k account<br>
-    <span class="mu">📝 ${P.n_eval} in evaluation · 💼 ${P.n_funded} funded · 🔁 ${P.resets} blown & restarted</span><br>
-    <span class="mu">Pass: reach $${(r.size+r.target).toLocaleString('en-GB')} · Blown: $${r.dd.toLocaleString('en-GB')} below best balance · Funded goal: $${r.payday}+/day</span></div></div>`;
+    <span class="mu">📝 ${P.n_eval} in evaluation · 💼 ${P.n_funded} funded · 💀 ${P.n_out} blown & out</span><br>
+    <span class="mu">Pass: 2 days of +$${r.eval_day.toLocaleString('en-GB')} · Out: $${r.dd.toLocaleString('en-GB')} below best balance · Funded goal: $${r.payday}+/day</span>
+    ${B?`<br><span class="mu">The Boss's account: ${B.dead?'💀 blown on '+esc(B.dead_day):(B.phase==='funded'?'💼 funded':'📝 in evaluation')}</span>`:''}</div></div>`;
 }
 function card(f){
   const col = COL[f.cls]||'#888';
@@ -479,8 +487,8 @@ function openModal(name, asset){
   if(!asset){ asset = (f.opens&&f.opens[0]&&f.opens[0].asset) || ((f.marks||[]).slice(-1)[0]||{}).a || assets[0]; }
   st.asset = asset;
   const q=f.qual||{}; const col=COL[f.cls];
-  const tl = f.trades.length ? f.trades.map(t=>`<div class="tl"><b class="${cls(t.pnl)}">${money(t.pnl)}</b> · ${M.multi?`<b>${esc(short(t.asset))}</b> `:''}${t.side} ${num(t.entry)} → ${num(t.exit)} <span class="mu">· ${esc(t.when)}</span><br><span class="mu">Why in:</span> ${esc(t.why)}<br><span class="mu">Why out:</span> ${esc(t.out)}</div>`).join('') : '<div class="empty">No finished trades in the arena yet.</div>';
-  const ol = (f.opens||[]).length ? (f.opens||[]).map(o=>`<div class="tl"><b class="${o.side==='Long'?'up':'dn'}">${o.side==='Long'?'▲':'▼'} ${esc(o.asset)}</b> in at ${num(o.entry)} (${esc(o.since)})${o.stop?` · stop ${num(o.stop)}`:''}${o.target?` · target ${num(o.target)}`:''} · open <b class="${cls(o.upnl)}">${money(o.upnl)}</b><br><span class="mu">Why:</span> ${esc(o.why)}</div>`).join('') : '<div class="mu" style="font-size:12px">No open positions.</div>';
+  const tl = f.trades.length ? f.trades.map(t=>`<div class="tl"><b class="${cls(t.pnl)}">${money(t.pnl)}</b> · ${M.multi?`<b>${esc(short(t.asset))}</b> `:''}${t.side}${t.lots?` ${t.lots} lot${t.lots>1?'s':''}`:''} ${num(t.entry)} → ${num(t.exit)} <span class="mu">· ${esc(t.when)}</span><br><span class="mu">Why in:</span> ${esc(t.why)}<br><span class="mu">Why out:</span> ${esc(t.out)}</div>`).join('') : '<div class="empty">No finished trades in the arena yet.</div>';
+  const ol = (f.opens||[]).length ? (f.opens||[]).map(o=>`<div class="tl"><b class="${o.side==='Long'?'up':'dn'}">${o.side==='Long'?'▲':'▼'} ${esc(o.asset)}${o.lots?` ×${o.lots}`:''}</b> in at ${num(o.entry)} (${esc(o.since)})${o.stop?` · stop ${num(o.stop)}`:''}${o.target?` · target ${num(o.target)}`:''} · open <b class="${cls(o.upnl)}">${money(o.upnl)}</b><br><span class="mu">Why:</span> ${esc(o.why)}</div>`).join('') : '<div class="mu" style="font-size:12px">No open positions.</div>';
   const abtn = assets.length>1 ? `<div style="margin:6px 0">${assets.map(a=>`<span class="abtn ${a===asset?'on':''}" data-asset="${esc(a)}">${esc(short(a))}</span>`).join('')}</div>` : '';
   document.getElementById('mbody').innerHTML = `
     <div class="ch"><div class="av" style="background:${col};flex-basis:54px;height:54px">${esc(ini(f.name))}</div>
@@ -562,12 +570,13 @@ function view(){
       <li><b>Sizing:</b> ${esc(M.sizing)}</li>
       <li><b>No cheating:</b> every decision is made at a bar's close and filled at the next bar's open. The bar still forming is ignored.${M.key==='hype'?' Headlines and Reddit numbers are only used after they were published.':''}</li>
       <li><b>As many trades as the setup allows:</b> after an exit, a fighter can go again whenever its setup shows up again. Every trade pays costs, so over-trading hurts.</li>
-      <li><b>Fair knockouts:</b> at ${esc(M.ko_time)} up to ${M.ko_per_day} fighters are knocked out, the worst first, but only if they are losing overall <i>and</i> lost money over their last 3 sessions. Every fighter gets ${M.grace} sessions' grace before it can be knocked out.</li>
+      ${A.prop?'':`<li><b>Fair knockouts:</b> at ${esc(M.ko_time)} up to ${M.ko_per_day} fighters are knocked out, the worst first, but only if they are losing overall <i>and</i> lost money over their last 3 sessions. Every fighter gets ${M.grace} sessions' grace before it can be knocked out.</li>`}
       <li><b>🐒 The Monkey team:</b> 20 monkeys trade at random with the same costs. A strategy that can't beat 75% of them is probably just lucky, so it can't win the Finals.</li>
-      ${A.prop?`<li><b>🏦 Prop firm:</b> every bot trades its own $${A.prop.rules.size.toLocaleString('en-GB')} account. <b>Evaluation:</b> pass by reaching $${(A.prop.rules.size+A.prop.rules.target).toLocaleString('en-GB')} at the end of a day. <b>Blown:</b> if the balance ever falls $${A.prop.rules.dd.toLocaleString('en-GB')} below its highest balance ${A.prop.rules.lock?`(the limit stops rising once it reaches $${A.prop.rules.size.toLocaleString('en-GB')})`:'(it trails every new high, including open trades)'}. A blown bot buys a new evaluation and starts again next session (🔁 counts the restarts). <b>Funded:</b> after passing it gets a fresh funded $${A.prop.rules.size.toLocaleString('en-GB')} account; the goal there is at least $${A.prop.rules.payday} a day. To win the Nasdaq finals a bot must also have passed the evaluation.</li>`:''}
+      ${A.prop?`<li><b>🏦 Prop firm:</b> every bot trades its own $${A.prop.rules.size.toLocaleString('en-GB')} account. <b>Evaluation:</b> pass with 2 days that each close at +$${A.prop.rules.eval_day.toLocaleString('en-GB')} or more (they don't have to be in a row). <b>Funded:</b> after passing it gets a fresh $${A.prop.rules.size.toLocaleString('en-GB')} account; the goal is at least $${A.prop.rules.payday} a day. <b>Out:</b> the moment its balance (open trades included) falls $${A.prop.rules.dd.toLocaleString('en-GB')} below its highest balance, the account is blown and the bot leaves the tower for good. Its seat goes to a new challenger with a fresh evaluation.</li>
+      <li><b>🤖 The bot's own safety rules:</b> up to ${A.prop.rules.max_lots} NQ minis per trade, fewer when it's close to the limit (3 lots with more than $1,500 of room, 2 with $1,000–1,500, 1 below that). <b>Daily stop:</b> after losing $${A.prop.rules.daily_stop} in a day it goes flat until tomorrow. <b>Daily goal:</b> in the evaluation it banks the day once it's +$${A.prop.rules.eval_day.toLocaleString('en-GB')}. Funded bots keep trading after $${A.prop.rules.payday}; the card also shows what would have happened if they stopped at $${A.prop.rules.payday}. To win the Nasdaq finals a bot must have passed the evaluation.</li>`:''}
       <li><b>🏆 Finals podium:</b> when the final bell rings, the best 3 fighters in profit make the podium (🥇🥈🥉) and are kept for paper trading. They are ranked by how many finals checks they pass, then by profit. 🥇 is a full champion only if it passes every check.</li>
       <li><b>New challengers:</b> empty seats go first to challengers that pass qualifying (last ${M.qual_sessions} sessions, at least 10 trades, profitable in both halves, profit factor ≥ 1.1). If not enough qualify, the best of the rest come in <i>on trial</i>.</li>
-      <li><b>Comebacks:</b> knocked-out fighters return to the waiting room after 5 sessions and can fight their way back.</li>
+      ${A.prop?'':`<li><b>Comebacks:</b> knocked-out fighters return to the waiting room after 5 sessions and can fight their way back.</li>`}
       <li><b>Leader 👑:</b> ${M.crown_needs_qual?'the qualified fighter with the highest arena P&amp;L.':'social data has no long history to qualify on yet, so the crown is provisional: the best fighter in profit.'}</li>
       <li><b>The Boss:</b> ${esc(A.boss.name)} is the benchmark to beat.</li>
       <li class="mu">A testing lab, not trading advice. Paper results ignore real-world issues like partial fills and fast markets.</li></ul></div>`;
@@ -639,9 +648,19 @@ function towerHTML(k, i){
       <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span>${a.prop?`<br><span class="mu">💼 ${a.prop.n_funded} funded · 📝 ${a.prop.n_eval} in eval</span>`:''}</div>
   </div>`;
 }
+function hallOfFame(){
+  const fr=D.frozen; if(!fr||!fr.leagues) return '';
+  const M=['🥇','🥈','🥉'];
+  const rows=D.order.map(k=>{ const F=fr.leagues[k]; if(!F) return ''; const a=D.arenas[k];
+    const P=F.podium||[F.winner,...(F.runners||[])].filter(Boolean);
+    return P.map((r,i)=>{ const f=a.fighters.find(x=>x.name===r.name); const since=f?(f.pnl||0)-(r.pnl||0):null;
+      const st=!f?'gone':f.status==='ko'?'💀 out':(f.prop&&f.prop.dead?'💀 blown':'✅ still running');
+      return `<div class="hof-r"><span>${a.meta.icon} ${M[i]} <b data-k="${k}" data-n="${esc(r.name)}" class="lnk">${esc(r.name)}</b></span><span>at finals <span class="${cls(r.pnl)}">${money(r.pnl)}</span> · since <span class="${cls(since)}">${since==null?'–':money(since)}</span> · ${st}</span></div>`; }).join(''); }).join('');
+  return `<div class="finals hof"><div class="px" style="font-size:10px;color:#7fd8ff;margin-bottom:8px;line-height:1.6">🏛 HALL OF FAME · the podium keeps trading after the finals, so we can see if it was skill or luck</div>${rows||'<div class="mu">Nobody made the podium.</div>'}</div>`;
+}
 function cityMoney(){
   const out={today:0, month:0, per:[], best:null, worst:null};
-  D.order.forEach(k=>{ const a=D.arenas[k]; const act=a.fighters.filter(f=>f.status==='active');
+  D.order.forEach(k=>{ const a=D.arenas[k]; if(a.prop) return; const act=a.fighters.filter(f=>f.status==='active');
     const t=act.reduce((s,f)=>s+(f.today||0),0), m=act.reduce((s,f)=>s+(f.month!=null?f.month:(f.pnl||0)),0);
     out.today+=t; out.month+=m; out.per.push({k, a, t, m, n:act.length});
     act.forEach(f=>{ if(!out.best||(f.today||0)>(out.best.f.today||0)) out.best={f,k}; if(!out.worst||(f.today||0)<(out.worst.f.today||0)) out.worst={f,k}; }); });
@@ -662,7 +681,7 @@ function billboard(){
     </div>
     <div class="bb-per">${per}</div>
     <div class="bb-crawl"><div class="bb-in">${crawl}${crawl?'<span class="sep">★</span>'+crawl:''}</div></div>
-    <div class="bb-note">Adds up every bot still in the game (dead ones don't count). Each bot trades its own small size, so this is the whole city's paper profit.</div>
+    <div class="bb-note">Adds up every bot still in the game in the Stock, Crypto and Hype towers. The Nasdaq tower runs as separate prop-firm accounts, so it isn't added here: see its own tower.</div>
   </div>`;
 }
 function cityView(){
@@ -679,6 +698,7 @@ function cityView(){
     <div class="towers">${D.order.map(towerHTML).join('')}</div>
     <div class="street"><div class="tape"><div class="tape-in">${tape||'<span>Quiet night in the city.</span>'}</div></div></div>
     ${finalsPanel()}
+    ${hallOfFame()}
     <div class="yard"><div class="yard-t px">☠ CEMETERY · ${graves.length}</div><div class="stones">${graves.slice(0,40).map(g=>`<div class="stone" data-k="${g.k}" data-n="${esc(g.f.name)}" title="${esc(g.f.name)} · ${money(g.f.pnl)}"><span>RIP</span><small>${esc(g.f.name.split(' ')[0])}</small></div>`).join('')||'<span class="mu">No graves yet.</span>'}</div></div>
     <div class="mu" style="font-size:11px;margin-top:8px;text-align:center">Updated ${esc(D.arenas[D.order[0]].meta.updated)} UK${D.reload?` · refreshes itself every few minutes`:''}</div>
   </div>`;
@@ -710,7 +730,7 @@ function sprite(f, j, live, leader, roomX){
   else if(w==='bed'){ x=beds[j%beds.length]; kls='sleep'; }
   else if(w==='panic'){ x=roomX.office[0]+Math.random()*(roomX.office[1]-roomX.office[0]); kls='wander panic'; range=roomX.office.join(','); dur=1.0; }
   else { x=roomX.lounge[0]+Math.random()*(roomX.lounge[1]-roomX.lounge[0]); kls='wander'; range=roomX.lounge.join(','); dur=2.4; }
-  const chip = op.length ? `<span class="chip2 ${cls(op.reduce((a,o)=>a+(o.upnl||0),0))}">${op.length>1?op.length+' open ':''}${op.length===1?(op[0].side==='Long'?'▲ ':'▼ ')+esc(short(op[0].asset)):''} ${money(op.reduce((a,o)=>a+(o.upnl||0),0))}</span>` : '';
+  const chip = op.length ? `<span class="chip2 ${cls(op.reduce((a,o)=>a+(o.upnl||0),0))}">${op.length>1?op.length+' open ':''}${op.length===1?(op[0].side==='Long'?'▲ ':'▼ ')+esc(short(op[0].asset))+(op[0].lots?'×'+op[0].lots:''):''} ${money(op.reduce((a,o)=>a+(o.upnl||0),0))}</span>` : '';
   const fx = (f.name===leader?'<span class="crown2">👑</span>':'') + (w==='panic'?'<span class="sweat2">💦</span>':'') + (w==='bed'?'<span class="zz2">z<small>z</small>z</span>':'')
            + ((f.today||0)>0 && w!=='bed'?'<span class="cash2">💰</span>':'') + (f.immune?'<span class="new2">✨</span>':'') + (f.prop&&f.prop.phase==='funded'?'<span class="fund2">💼</span>':'');
   if(j%2) kls+=' alt';
@@ -789,7 +809,7 @@ function towerView(){
         <div class="cage"><div class="ped">🐒</div><div><b>MONKEY CAGE</b> · ${a.monkeys?a.monkeys.n:0} random traders<br><span class="mu">typical</span> <span class="${cls((a.monkeys||{}).median)}">${money((a.monkeys||{}).median)}</span> · <span class="mu">top 25%</span> <span class="${cls((a.monkeys||{}).p75)}">${money((a.monkeys||{}).p75)}</span></div></div>
         ${propDesk(a)}
         <div class="elev"><span class="px" style="font-size:8px">🛗 ARRIVALS</span><div class="arr">${arriving.map(f=>`<div class="sp stand" data-n="${esc(f.name)}" style="position:relative;left:auto">${guy(f,'')}<i class="legs"><i></i><i></i></i><div class="tag2">${esc(f.name.slice(0,14))}</div></div>`).join('')||'<span class="mu" style="font-size:11px">nobody today</span>'}</div></div>
-        <div class="mu" style="font-size:11.5px">Knockouts: <b style="color:#ff4d5e">${esc(m.ko_time)}</b> · bottom ${m.ko_per_day} go to the cemetery</div></div>
+        <div class="mu" style="font-size:11.5px">${a.prop?`Blown accounts leave at the bell (<b style="color:#ff4d5e">${esc(m.ko_time)}</b>) · their seats go to new challengers`:`Knockouts: <b style="color:#ff4d5e">${esc(m.ko_time)}</b> · bottom ${m.ko_per_day} go to the cemetery`}</div></div>
       <div class="basement"><div class="ph-t px">🚇 THE TUNNEL · challengers waiting for a seat</div>
         <div class="bench">${a.queue.slice(0,10).map(q=>`<div class="waiter q" title="${esc(q.about)}">${guy({name:q.name,cls:q.cls},'idle')}<small>${esc(q.name)}</small><em>${q.qual.ok?'★ qualified':'on the bench'}</em></div>`).join('')}</div></div>
     </div>

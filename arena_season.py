@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import arena_core as C
+import arena_prop as PR
 
 warnings.simplefilter("ignore", FutureWarning)
 
@@ -20,6 +21,7 @@ class Cfg:
         self.revive = {n: pd.Timestamp(d).date() for n, d in (revive or {}).items()}  # second chances
         self.ko_per_day, self.qual_sessions, self.week_len = ko_per_day, qual_sessions, week_len
         self.min_qual_sessions = min_qual_sessions
+        self.protect, self.protect_from = set(), None  # Hall of Fame: podium fighters kept after the finals
 
 
 class Arena:
@@ -97,8 +99,11 @@ def run_season(A, now=None):
             cross[n] = s["fn"](A.dfs)
     C._ROWS.clear()
     bt = {n: run_fighter(A, s, cross) for n, s in strats.items()}
+    bt_raw = dict(bt)  # the strategy's own trades (qualifying always uses these)
     eq = {n: t.attrs["equity"] for n, t in bt.items()}
-    monkey_eq = [run_fighter(A, mk, {}).attrs["equity"] for mk in A.monkeys]
+    monkey_bt = [run_fighter(A, mk, {}) for mk in A.monkeys]
+    monkey_eq = [t.attrs["equity"] for t in monkey_bt]
+    acct = {}
 
     m = A.master
     dates = np.array(m["date"].values)
@@ -107,6 +112,16 @@ def run_season(A, now=None):
     sess_first_i = {d: int(np.where(dates == d)[0][0]) for d in sessions}
     complete = {d: bool(m["last"].values[sess_last_i[d]]) for d in sessions}
     live = [d for d in sessions if d >= cfg.start]
+    asset0 = list(A.dfs)[0]
+
+    def start_account(n, day):
+        """Prop leagues: a fighter trades its own account from `day`; its season P&L is that account."""
+        if not A.prop or day is None or day not in sess_first_i:
+            return
+        e, tk, info, ev, dday = PR.open_account(m, bt_raw[n], A.sizing.get("contracts", 1), sess_first_i[day], A.prop,
+                                                A.sizing, n, asset0)
+        eq[n], bt[n] = e, tk
+        acct[n] = dict(info=info, events=ev, dead_day=dday, start=day)
 
     def eq_end(name, d):
         return float(eq[name].values[sess_last_i[d]])
@@ -123,7 +138,7 @@ def run_season(A, now=None):
         s0 = pd.Timestamp(win[0]).tz_localize(tz)
         mid = pd.Timestamp(win[len(win) // 2]).tz_localize(tz)
         end = pd.Timestamp(win[-1]).tz_localize(tz) + pd.Timedelta(days=1)
-        t = bt[name]
+        t = bt_raw[name]
         a, b1, b2 = C.score(t, s0, end), C.score(t, s0, mid), C.score(t, mid, end)
         ok = a["trades"] >= 10 and b1["net"] > 0 and b2["net"] > 0 and (a["pf"] if a["pf"] == a["pf"] else 0) >= 1.1
         return dict(ok=bool(ok), sessions=len(win), net=_f(a["net"], 0), h1=_f(b1["net"], 0), h2=_f(b2["net"], 0),
@@ -132,6 +147,12 @@ def run_season(A, now=None):
     members, events, trophies = {}, [], []
     season_on = len(live) > 0
     first_day = live[0] if season_on else cfg.start
+    if A.prop and season_on:
+        for s in A.roster:
+            start_account(s["name"], first_day)
+        start_account(A.bench["name"], first_day)
+        monkey_eq = [pd.Series(PR.simulate(m, t, t.attrs.get("open", []), sess_first_i[first_day], A.prop, A.sizing["point_value"],
+                                           A.sizing["cost_rt"], A.sizing.get("contracts", 1))[0], index=m.index) for t in monkey_bt]
     for s in A.roster:
         n = s["name"]
         members[n] = dict(name=n, origin="original", status="active", joined=first_day,
@@ -159,23 +180,28 @@ def run_season(A, now=None):
         cands = []
         for mm in act:
             l3, n_f = last3(mm)
+            if cfg.protect_from is not None and d >= cfg.protect_from and mm["name"] in cfg.protect:
+                continue  # Hall of Fame: kept running after the finals so we keep testing it
             if pnl[mm["name"]] <= 0 and l3 <= 0 and n_f >= cfg.grace:
                 cands.append(mm)
         cands.sort(key=lambda mm: pnl[mm["name"]])
         kos = cands[:cfg.ko_per_day]
+        if A.prop:  # prop league: the only way out is blowing the account
+            kos = [mm for mm in act if mm["name"] in acct and acct[mm["name"]]["dead_day"] == d]
         t_close = pd.Timestamp(d).tz_localize(tz) + close_off
         for mm in kos:
             mm.update(status="ko", ko_day=d, ko_pnl=pnl[mm["name"]])
             ndays = len([x for x in sessions if mm["joined"] <= x <= d])
             events.append(dict(t=t_close, kind="ko", name=mm["name"], pnl=pnl[mm["name"]],
-                               text=f"KNOCKED OUT after {ndays} session(s) with {_money(pnl[mm['name']])}."))
-        if act and not kos:
+                               text=(f"OUT! Blew its prop account after {ndays} session(s) ({_money(pnl[mm['name']])}). Leaves the tower for good."
+                                     if A.prop else f"KNOCKED OUT after {ndays} session(s) with {_money(pnl[mm['name']])}.")))
+        if act and not kos and not A.prop:
             events.append(dict(t=t_close, kind="info", name="", pnl=None,
                                text="Nobody knocked out: no fighter was losing overall and over its last 3 sessions (new fighters get 3 sessions' grace)."))
         if kos:
             # waiting room: challengers never used yet, plus knocked-out fighters after a 5-session cooldown
             waiting = [s for s in A.pool if s["name"] not in used]
-            for mm in members.values():
+            for mm in ([] if A.prop else members.values()):  # prop league: blown accounts never come back
                 if mm["status"] == "ko" and mm["ko_day"] != d and len([x for x in sessions if mm["ko_day"] < x <= d]) >= 5:
                     waiting.append(strats[mm["name"]])
             upto = nxt or (d + pd.Timedelta(days=1))
@@ -187,6 +213,7 @@ def run_season(A, now=None):
             for n, qq in ok[:len(kos)]:
                 used.add(n)
                 back = n in members
+                start_account(n, nxt)
                 members[n] = dict(name=n, origin="challenger", status="active", joined=nxt, base=eq_end(n, d),
                                   qual=qq, ko_day=None, ko_pnl=None, comeback=back)
                 events.append(dict(t=t_close + pd.Timedelta(minutes=1), kind="join", name=n, pnl=None,
@@ -198,6 +225,7 @@ def run_season(A, now=None):
         for rn, rday in cfg.revive.items():
             mm = members.get(rn)
             if nxt == rday and mm is not None and mm["status"] == "ko":
+                start_account(rn, nxt)
                 members[rn] = dict(name=rn, origin="challenger", status="active", joined=nxt, base=eq_end(rn, d),
                                    qual=qualify(rn, nxt), ko_day=None, ko_pnl=None, comeback=True)
                 events.append(dict(t=t_close + pd.Timedelta(minutes=4), kind="join", name=rn, pnl=None,
@@ -221,7 +249,10 @@ def run_season(A, now=None):
             events.append(dict(t=t_close + pd.Timedelta(minutes=3), kind="trophy", name=best or "", pnl=bp if best else None,
                                text=(f"WEEK {wk} CHAMPION with {_money(bp)} for the week." if best else
                                      f"WEEK {wk}: no eligible fighter made money, so no trophy this week.")))
-    return dict(strats=strats, bt=bt, eq=eq, members=members, events=events, trophies=trophies, sessions=sessions,
+    for n, ac in acct.items():
+        if n in members:
+            events += ac["events"]
+    return dict(strats=strats, bt=bt, eq=eq, members=members, events=events, trophies=trophies, sessions=sessions, acct=acct, bt_raw=bt_raw,
                 live=live, done_days=done_days, complete=complete, sess_first_i=sess_first_i, sess_last_i=sess_last_i,
                 bench=bname, bench_base=bench_base, now=now, qualify=qualify, monkey_eq=monkey_eq,
                 monkey_base=[(float(e.values[sess_first_i[first_day] - 1]) if season_on and sess_first_i[first_day] > 0 else
@@ -280,14 +311,7 @@ def game_state(A, S):
                 spark.append(round(float(eqs.values[S["sess_last_i"][d]]) - mm["base"], 0))
                 if pd.Timestamp(d) < m0:
                     pre_month = spark[-1]
-        prop = None
-        if A.prop and j_ts is not None:
-            ss = [(d, S["sess_first_i"][d], S["sess_last_i"][d], S["complete"][d]) for d in S["sessions"]
-                  if d >= mm["joined"] and (mm["ko_day"] is None or d <= mm["ko_day"])]
-            prop, pev = prop_account(eqs.values, ss, A.prop, m.index)
-            for e in pev:
-                e["name"] = n
-            feed += pev
+        prop = S["acct"][n]["info"] if (A.prop and n in S.get("acct", {})) else None
         today_base = float(eqs.values[day_start_i - 1]) if day_start_i > 0 else 0.0
         if j_ts is not None and mm["joined"] == cur_day:
             today_base = mm["base"]
@@ -342,9 +366,9 @@ def game_state(A, S):
             if o["entry_time"] >= day_start_ts:
                 marks.append(dict(a=o["asset"], t=_uk(o["entry_time"]).strftime("%H:%M"), px=_f(o["entry"]), k="in", side=int(o["side"])))
         trades_list = [dict(when=_uk(r.entry_time).strftime("%a %d %b %H:%M"), asset=r.asset, side="Long" if r.side > 0 else "Short",
-                            entry=_f(r.entry), exit=_f(r.exit), pnl=_f(r.pnl, 0), why=w_in(r.asset, r.side, r.in_dec), out=w_out(r))
+                            entry=_f(r.entry), exit=_f(r.exit), pnl=_f(r.pnl, 0), lots=(int(r.lots) if hasattr(r, "lots") and r.lots == r.lots else None), why=w_in(r.asset, r.side, r.in_dec), out=w_out(r))
                        for r in tt.tail(15).iloc[::-1].itertuples()]
-        open_list = [dict(asset=o["asset"], side="Long" if o["side"] > 0 else "Short", entry=_f(o["entry"]),
+        open_list = [dict(asset=o["asset"], side="Long" if o["side"] > 0 else "Short", entry=_f(o["entry"]), lots=o.get("lots"),
                           stop=_f(o["stop"]), target=_f(o["target"]), upnl=_f(o["upnl"], 0),
                           since=_uk(o["entry_time"]).strftime("%a %H:%M"), why=w_in(o["asset"], o["side"], o["in_dec"])) for o in opens]
         days_in = len([d for d in S["done_days"] if j_ts is not None and d >= mm["joined"] and (mm["ko_day"] is None or d <= mm["ko_day"])])
@@ -359,10 +383,12 @@ def game_state(A, S):
         sp = f["spark"]
         f["fought"] = max(0, len(sp) - 1)
         f["last3"] = (sp[-1] - sp[-4]) if len(sp) >= 4 else (sp[-1] if sp else 0.0)
-        f["grace_left"] = max(0, cfg.grace - f["fought"]) if f["status"] == "active" else 0
+        f["grace_left"] = max(0, cfg.grace - f["fought"]) if (f["status"] == "active" and not A.prop) else 0
     elig = [f for f in act if (f["pnl"] or 0) <= 0 and f["last3"] <= 0 and f["fought"] >= cfg.grace]
     elig.sort(key=lambda f: f["pnl"] or 0)
     danger = {f["name"] for f in elig[:cfg.ko_per_day]} if started else set()
+    if A.prop:  # danger = blown today, or within $500 of the limit
+        danger = {f["name"] for f in act if f.get("prop") and (f["prop"]["dead"] or f["prop"]["room"] <= 500)}
     for f in fighters:
         f["danger"] = f["name"] in danger
         f["safe"] = f["status"] == "active" and ((f["pnl"] or 0) > 0 or f["last3"] > 0)
@@ -386,7 +412,8 @@ def game_state(A, S):
         td = d[d["date"] == cur_day]
         candles[a] = [[_uk(ts).strftime("%H:%M"), _f(r.open), _f(r.high), _f(r.low), _f(r.close), _f(r.vwap)] for ts, r in td.iterrows()]
     leader = None
-    pool_l = [f for f in act if (f["pnl"] or 0) > 0 and (f["qualified"] or not A.crown_needs_qual)]
+    alive = lambda f: not (f.get("prop") or {}).get("dead")
+    pool_l = [f for f in act if (f["pnl"] or 0) > 0 and (f["qualified"] or not A.crown_needs_qual) and alive(f)]
     if pool_l:
         leader = max(pool_l, key=lambda f: f["pnl"])["name"]
     top_raw = max(act, key=lambda f: f["pnl"] or 0)["name"] if act else None
@@ -419,9 +446,10 @@ def game_state(A, S):
                           best=_f(max(mk), 0) if mk else None, worst=_f(min(mk), 0) if mk else None)
     out["meta"]["grace"] = cfg.grace
     if A.prop:
-        ps = [f["prop"] for f in fighters if f["status"] == "active" and f.get("prop")]
+        ps = [f["prop"] for f in fighters if f["status"] == "active" and f.get("prop") and not f["prop"]["dead"]]
         out["prop"] = dict(rules=A.prop, n_eval=sum(p["phase"] == "eval" for p in ps), n_funded=sum(p["phase"] == "funded" for p in ps),
-                           resets=sum(p["resets"] for p in ps), passes=sum(p["passes"] for p in ps),
+                           n_out=len([f for f in fighters if f["status"] == "ko"]) + len([f for f in act if f.get("prop") and f["prop"]["dead"]]),
+                           passes=sum(p["passes"] for p in ps), boss=(S["acct"].get(S["bench"]) or {}).get("info"),
                            best_funded=max(((f["name"], f["prop"]["funded_pnl"]) for f in fighters
                                             if f["status"] == "active" and f.get("prop") and f["prop"]["funded_days"]),
                                            key=lambda x: x[1], default=None))
@@ -430,76 +458,6 @@ def game_state(A, S):
 
 
 
-# ---------------------------------------------------------------- prop-firm account
-PROP_DEFAULT = dict(size=50000.0, target=3000.0, dd=2000.0, payday=150.0, lock=False)
-
-
-def prop_account(eq, sessions, P, index):
-    """Runs one fighter's arena P&L through prop-firm rules.
-    eq: mark-to-market equity per bar. sessions: [(date, first_i, last_i)] it fought.
-    EVALUATION: start at size; pass when a day ends at size+target. FUNDED: a fresh account at size.
-    Either account is BLOWN the moment equity falls to (highest balance - dd); the floor stops rising at
-    the starting balance (lock). A blown account buys a new evaluation from the next session."""
-    size, target, dd, payday = P["size"], P["target"], P["dd"], P["payday"]
-    phase, need_new, ref, peak = "eval", True, 0.0, size
-    resets = passes = blown_funded = 0
-    f_days = f_paydays = 0
-    f_pnl = f_done = 0.0
-    events, last_day = [], None
-    bal = size
-    eval_start = None
-    for (d, i0, i1, done) in sessions:
-        if need_new:
-            ref = float(eq[i0 - 1]) if i0 > 0 else 0.0
-            peak, need_new = size, False
-            if phase == "eval":
-                eval_start = d
-        day_open = size + float(eq[i0 - 1] if i0 > 0 else 0.0) - ref
-        dead = False
-        for i in range(i0, i1 + 1):
-            b = size + float(eq[i]) - ref
-            peak = max(peak, b)
-            floor = peak - dd
-            if P.get("lock", True):
-                floor = min(floor, size)
-            if b <= floor:
-                events.append(dict(t=index[i], kind="loss", name=None, pnl=None,
-                                   text=(f"BLEW the {'FUNDED' if phase == 'funded' else 'evaluation'} account: balance ${b:,.0f} "
-                                         f"hit the ${dd:,.0f} drawdown limit (best was ${peak:,.0f}). Buying a new evaluation.")))
-                resets += 1
-                if phase == "funded":
-                    blown_funded += 1
-                    f_days += 1
-                    f_pnl += b - day_open
-                    f_done += b - day_open
-                phase, need_new, dead, bal = "eval", True, True, size
-                break
-            bal = b
-        last_day = d
-        if dead:
-            continue
-        if phase == "funded":
-            day = bal - day_open
-            f_pnl += day
-            if done:  # only finished days count towards the $150/day goal
-                f_days += 1
-                f_done += day
-                f_paydays += day >= payday
-        elif done and bal >= size + target:
-            passes += 1
-            events.append(dict(t=index[i1], kind="trophy", name=None, pnl=None,
-                               text=f"PASSED the prop evaluation at ${bal:,.0f}! Gets a FUNDED ${size:,.0f} account from the next session."))
-            phase, need_new, bal = "funded", True, size
-    if need_new:
-        bal, peak = size, size
-    floor = min(peak - dd, size) if P.get("lock", True) else peak - dd
-    out = dict(phase=phase, balance=round(bal), peak=round(peak), floor=round(floor), room=round(bal - floor),
-               to_target=round(max(0.0, size + target - bal)) if phase == "eval" else 0,
-               resets=resets, passes=passes, blown_funded=blown_funded,
-               funded_days=f_days, paydays=f_paydays, funded_pnl=round(f_pnl),
-               funded_avg=round(f_done / f_days) if f_days else None, fresh=need_new,
-               eval_since=str(eval_start) if eval_start is not None else None)
-    return out, events
 
 # ---------------------------------------------------------------- plain-English rulebook
 import re as _re
@@ -554,7 +512,7 @@ def finals(state, crown_needs_qual=True, risk_limit=FINAL_RISK_LIMIT, prop=False
     """Who would win the league right now, and which checks each contender passes."""
     rows = []
     for f in state["fighters"]:
-        if f["status"] != "active":
+        if f["status"] != "active" or (f.get("prop") or {}).get("dead"):
             continue
         ch = dict(qualified=bool(f["qualified"] or not crown_needs_qual), profit=(f["pnl"] or 0) > 0,
                   consistent=f["days_total"] > 0 and f["days_up"] / f["days_total"] >= 0.5,

@@ -3,6 +3,7 @@ import os, time
 import pandas as pd
 import arena_core as C
 import arena_season as SE
+import arena_prop as PR
 import arena_strats as NQS
 import arena_stocks as STK
 import arena_crypto as CRY
@@ -88,7 +89,7 @@ class Settings:
                                   stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
                                   finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena",
                                   risk_limits={"nq": 2000, "stocks": 1500, "crypto": 1000, "hype": 1500},
-                                  prop={"nq": dict(size=50000.0, target=3000.0, dd=2000.0, payday=150.0, lock=False)},
+                                  prop={"nq": dict(PR.PROP)},
                                   revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3))
         self.__dict__.update(kw)
 
@@ -167,6 +168,21 @@ def build_hype(st, folder, now, stock_dfs, spy, news=None, reddit=None):
     return A
 
 
+def _hall_of_fame(folder):
+    """After the finals: {league: (finals date, [podium names])} from the saved finals.json."""
+    import json
+    try:
+        data = json.load(open(os.path.join(folder, "finals.json")))
+    except Exception:
+        return {}
+    day = pd.Timestamp(data["at"]).tz_convert(NY).date()
+    out = {}
+    for k, F in data.get("leagues", {}).items():
+        pod = F.get("podium") or [x for x in [F.get("winner")] + (F.get("runners") or []) if x]
+        out[k] = (day, [r["name"] for r in pod])
+    return out
+
+
 def build_all(st, folder, now=None, which=("nq", "stocks", "crypto", "hype"), cache=None, reload_sec=None):
     now = now or pd.Timestamp.now(tz=NY)
     cache = cache if cache is not None else {}
@@ -186,6 +202,9 @@ def build_all(st, folder, now=None, which=("nq", "stocks", "crypto", "hype"), ca
                     _, sd, spy = build_stocks(st, folder, now)
                     stock_parts = (sd, spy)
                 A = build_hype(st, folder, now, *stock_parts)
+            hall = _hall_of_fame(folder).get(key)
+            if hall:
+                A.cfg.protect, A.cfg.protect_from = set(hall[1]), hall[0]
             S = SE.run_season(A, now)
             cache[key] = SE.game_state(A, S)
         except Exception as e:
