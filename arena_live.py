@@ -10,6 +10,7 @@ import arena_crypto as CRY
 import arena_social as SOC
 import arena_world as AW
 import arena_meme as MEME
+import arena_ict as ICT
 import arena_hub as H
 
 NY, UK = "America/New_York", "Europe/London"
@@ -89,11 +90,11 @@ class Settings:
         self.__dict__.update(dict(nq_start="2026-10-07", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
                                   ko_hype=1, nq_symbol="NQ=F", point_value=20.0, nq_contracts=3, nq_cost=14.0, stock_size=10000.0,
                                   stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
-                                  finals_at="2026-10-16T21:00:00+01:00", repo="difranino/strategy-arena",
+                                  finals_at="2026-10-23T21:00:00+01:00", repo="difranino/strategy-arena",
                                   risk_limits={"nq": 2000, "stocks": 1500, "crypto": 1000, "hype": 1500},
                                   prop={"nq": dict(PR.PROP)},
                                   revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3,
-                                  news_join="2026-10-13"))
+                                  news_join="2026-10-13", ict_join="2026-10-14"))
         self.__dict__.update(kw)
 
 
@@ -113,8 +114,12 @@ def build_nq(st, folder, now, raw=None):
     except Exception as e:
         print(f"Roll guard skipped ({e}).")
     df = C.add_indicators(df)
+    ICT.add_ict_cols(df)
     df["asset"] = "NQ"
-    A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, NQS.original_roster(), NQS.challenger_pool(),
+    ict = ICT.roster()
+    for s_ in ict:
+        s_["joins"] = getattr(st, "ict_join", None)
+    A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, NQS.original_roster() + ict, NQS.challenger_pool(),
                  NQS.benchmark(), SE.Cfg(st.nq_start, ko_per_day=st.ko_nq, grace=st.grace, revive=st.revive.get("nq")),
                  dict(point_value=st.point_value, cost_rt=st.nq_cost, contracts=st.nq_contracts), market="rth", unit_label="contract",
                  risk_limit=st.risk_limits.get("nq", 1000), monkeys=NQS.monkeys(st.monkeys), prop=st.prop.get("nq"),
@@ -238,7 +243,7 @@ def code_index():
     """Where each fighter's rules live in the code, so the site can link straight to them."""
     import re
     idx = {}
-    for mod in (NQS, STK, CRY, SOC, AW):
+    for mod in (NQS, STK, CRY, SOC, AW, ICT):
         path = mod.__file__
         for i, line in enumerate(open(path, encoding="utf-8")):
             m = re.search(r'S\("([^"]+)"', line)

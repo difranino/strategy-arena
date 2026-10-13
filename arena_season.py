@@ -11,7 +11,8 @@ warnings.simplefilter("ignore", FutureWarning)
 
 NY, UK = "America/New_York", "Europe/London"
 CLASS = {"Breakout": "Striker", "Reversal": "Counter", "Trend": "Rider", "Momentum": "Sprinter",
-         "Quant": "Brain", "Hype": "Hypebeast", "Benchmark": "Boss"}
+         "Quant": "Brain", "Hype": "Hypebeast", "Benchmark": "Boss", "ICT": "Smart Money", "OrderFlow": "Tape Reader",
+         "News": "Newshound"}
 
 
 class Cfg:
@@ -147,20 +148,24 @@ def run_season(A, now=None):
     members, events, trophies = {}, [], []
     season_on = len(live) > 0
     first_day = live[0] if season_on else cfg.start
+    def join_day(s):
+        """First session a roster fighter plays (later than the season start if it was added mid-season)."""
+        if s.get("joins") and season_on:
+            j0 = pd.Timestamp(s["joins"]).date()
+            if j0 > first_day:
+                later = [x for x in sessions if x >= j0]
+                return later[0] if later else None
+        return first_day
+
     if A.prop and season_on:
         for s in A.roster:
-            start_account(s["name"], first_day)
+            start_account(s["name"], join_day(s))
         start_account(A.bench["name"], first_day)
         monkey_eq = [pd.Series(PR.simulate(m, t, t.attrs.get("open", []), sess_first_i[first_day], A.prop, A.sizing["point_value"],
                                            A.sizing["cost_rt"], A.sizing.get("contracts", 1))[0], index=m.index) for t in monkey_bt]
     for s in A.roster:
         n = s["name"]
-        jd = first_day
-        if s.get("joins") and season_on:  # added mid-season: starts on its own date (waits in the lobby until then)
-            j0 = pd.Timestamp(s["joins"]).date()
-            if j0 > first_day:
-                later = [x for x in sessions if x >= j0]
-                jd = later[0] if later else None
+        jd = join_day(s)  # added mid-season: starts on its own date (waits in the lobby until then)
         members[n] = dict(name=n, origin="original", status="active", joined=jd,
                           base=(eq_before(n, jd) if jd is not None else 0.0) if season_on else float(eq[n].values[-1]),
                           qual=qualify(n, jd or first_day), ko_day=None, ko_pnl=None)

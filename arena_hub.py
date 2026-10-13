@@ -379,7 +379,8 @@ JS = r"""
 (function(){
 const D = __DATA__;
 const R = document.getElementById('arena');
-const COL = {Striker:'#ff8a4c',Counter:'#b07cff',Rider:'#3ea8ff',Sprinter:'#ffd23e',Brain:'#2fe0c0',Hypebeast:'#ff3ea5',Boss:'#8592b0'};
+const COL = {Striker:'#ff8a4c',Counter:'#b07cff',Rider:'#3ea8ff',Sprinter:'#ffd23e',Brain:'#2fe0c0',Hypebeast:'#ff3ea5',Boss:'#8592b0','Smart Money':'#ff5ad1',
+  'Tape Reader':'#7dff6a',Newshound:'#ffffff'};
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money = (x, sign=true) => x==null ? '–' : (sign && x>0?'+':x<0?'−':'') + '$' + Math.abs(Math.round(x)).toLocaleString('en-GB');
 const num = x => x==null ? '–' : Number(x).toLocaleString('en-GB',{maximumFractionDigits:2});

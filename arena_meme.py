@@ -140,7 +140,11 @@ def update(folder, now_ts=None, rpc_fn=None, price_fn=None):
             good = [s for s in sigs if not s.get("err")]
             skipped += max(0, len(good) - MAX_TX_PER_WALLET)
             for s in reversed(good[:MAX_TX_PER_WALLET]):   # oldest first
-                tx = rpc_fn("getTransaction", [s["signature"], {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}])
+                try:
+                    tx = rpc_fn("getTransaction", [s["signature"], {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 1}])
+                except Exception as e:
+                    tx = None
+                    errors.append(f"{name}: {str(e)[:60]}")
                 for (mint, dlt, pre, money, usd) in swaps_in_tx(tx, w):
                     signals.append(dict(trader=name, mint=mint, delta=dlt, pre=pre, money=money, usd=usd,
                                         t=s.get("blockTime") or now))
@@ -209,6 +213,7 @@ def update(folder, now_ts=None, rpc_fn=None, price_fn=None):
     eq = equity(S)
     S["equity"].append([t_now, round(eq, 2)])
     S["equity"] = S["equity"][-3000:]
+    errors = list(dict.fromkeys(errors))[:5]
     S["status"] = ("Some data sources didn't answer this time: " + "; ".join(errors)) if errors else "OK"
     S["updated"] = t_now
     if path:
