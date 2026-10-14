@@ -123,6 +123,11 @@ def build_nq(st, folder, now, raw=None, m1=None, qqq=None):
         m1 = FL.load_1m(folder)
     FL.add_flow_cols(df, m1)
     FL.build_h1(df)
+    try:
+        FL.plan_trend_rider(df[df["date"] >= pd.Timestamp(st.nq_start).date()], report=True)
+        FL.plan_machine_gun(df)
+    except Exception as e:
+        print(f"Order-flow check failed ({e}).")
     lib = {s_["name"]: s_ for s_ in NQS.original_roster() + NQS.challenger_pool()}
     roster = FL.hourly_roster(lib) + FL.flow_roster()
     A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, roster, [],

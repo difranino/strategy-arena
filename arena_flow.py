@@ -297,21 +297,32 @@ def plan_machine_gun(d):
     return sig, fresh, stop, rr
 
 
-def plan_trend_rider(d):
+def plan_trend_rider(d, report=False):
     a = d.atr.values
     out_up = (d.close > d.s_vah).values
     out_dn = (d.close < d.s_val).values
     lvl_l = np.fmax(d.vwap.values, d.s_vah.values)
     lvl_s = np.fmin(d.vwap.values, d.s_val.values)
-    touch_l = d.low.values <= lvl_l + 0.15 * a
-    touch_s = d.high.values >= lvl_s - 0.15 * a
-    ab_s = d.absorb_sell.values | np.roll(d.absorb_sell.values, 1)          # sellers hit hard, price didn't move
-    ab_b = d.absorb_buy.values | np.roll(d.absorb_buy.values, 1)
+    touch_l = d.low.values <= lvl_l + 0.25 * a
+    touch_s = d.high.values >= lvl_s - 0.25 * a
+    # absorption = the other side hit hard but price didn't follow: selling delta on a candle that didn't fall,
+    # or a big-volume small-body candle with selling delta (mirror for shorts). Looked for in this or the 2 previous candles.
+    sell_abs = (d.absorb_sell | ((d.cdelta < 0) & (d.close >= d.open))).values
+    buy_abs = (d.absorb_buy | ((d.cdelta > 0) & (d.close <= d.open))).values
+    ab_s = sell_abs | np.roll(sell_abs, 1) | np.roll(sell_abs, 2)
+    ab_b = buy_abs | np.roll(buy_abs, 1) | np.roll(buy_abs, 2)
     green = (d.close > d.open).values & (d.cdelta > 0).values
     red = (d.close < d.open).values & (d.cdelta < 0).values
     w = _window(d)
     L = out_up & touch_l & ab_s & green & w
     Sh = out_dn & touch_s & ab_b & red & w
+    if report:
+        has = d.cdelta.notna().values
+        print("VA Trend Rider check (candles with 1-min data):", int(has.sum()),
+              "| outside value area up/down:", int((out_up & has).sum()), int((out_dn & has).sum()),
+              "| + at a level:", int((out_up & touch_l).sum()), int((out_dn & touch_s).sum()),
+              "| + absorption:", int((out_up & touch_l & ab_s).sum()), int((out_dn & touch_s & ab_b).sum()),
+              "| + delta candle (signals):", int(L.sum()), int(Sh.sum()))
     sig = np.where(L, 1, np.where(Sh, -1, 0))
     stop = np.where(sig > 0, np.fmin(d.low.values, lvl_l) - TICK, np.where(sig < 0, np.fmax(d.high.values, lvl_s) + TICK, np.nan))
     return sig, sig.copy(), stop, np.ones(len(d))
