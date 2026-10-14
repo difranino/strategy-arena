@@ -173,7 +173,8 @@ def run_season(A, now=None):
     bench_base = eq_before(bname, first_day) if season_on else float(eq[bname].values[-1])
     used = set(members)
     tz = m.index.tz
-    close_off = pd.Timedelta(hours=16) if A.market == "rth" else pd.Timedelta(hours=24)
+    close_off = (pd.Timedelta(hours=16) if A.market == "rth" else pd.Timedelta(hours=16, minutes=45) if A.market == "globex"
+                 else pd.Timedelta(hours=24))
 
     done_days = [d for d in live if complete[d]]
     for di, d in enumerate(done_days):
@@ -274,12 +275,24 @@ def _is_live(A, now):
     if A.market == "crypto":
         return True
     n = now.tz_convert(NY)
+    if A.market == "globex":   # CME Globex: Sunday 18:00 to Friday 16:45 New York, daily break 16:45-18:00
+        hm = (n.hour, n.minute)
+        if n.dayofweek == 5 or (n.dayofweek == 6 and hm < (18, 0)) or (n.dayofweek == 4 and hm >= (16, 45)):
+            return False
+        return not ((16, 45) <= hm < (18, 0))
     return n.dayofweek < 5 and (9, 30) <= (n.hour, n.minute) < (16, 0)
 
 
-def _next_open(now):
+def _next_open(now, market="rth"):
     n = now.tz_convert(NY)
     d = n.normalize()
+    if market == "globex":
+        for k in range(0, 8):
+            day = d + pd.Timedelta(days=k)
+            if day.dayofweek in (6, 0, 1, 2, 3):
+                op = day + pd.Timedelta(hours=18)
+                if op > n:
+                    return op
     for k in range(0, 8):
         day = d + pd.Timedelta(days=k)
         if day.dayofweek >= 5:
@@ -297,7 +310,8 @@ def game_state(A, S):
     day_start_i = S["sess_first_i"][cur_day]
     day_start_ts = m.index[day_start_i]
     started = len(S["live"]) > 0
-    in_session = _is_live(A, now) and (A.market == "crypto" or pd.Timestamp(cur_day) == pd.Timestamp(now.tz_convert(NY).date()))
+    today_ny = (now.tz_convert(NY) + pd.Timedelta(hours=6)).date() if A.market == "globex" else now.tz_convert(NY).date()
+    in_session = _is_live(A, now) and (A.market == "crypto" or pd.Timestamp(cur_day) == pd.Timestamp(today_ny))
     multi = len(A.dfs) > 1
 
     fighters, feed = [], []
@@ -434,9 +448,11 @@ def game_state(A, S):
         price = float(d.close.iloc[-1])
         pc = float(pc) if pc == pc else price
         tick.append(dict(a=a, price=_f(price), chg_pct=_f((price / pc - 1) * 100)))
-    nxt_open = _next_open(now)
+    nxt_open = _next_open(now, A.market)
     if A.market == "crypto":
         ko_time = "00:00 UK (midnight)"
+    elif A.market == "globex":
+        ko_time = _uk(pd.Timestamp(today_ny).tz_localize(NY) + pd.Timedelta(hours=16, minutes=45)).strftime("%H:%M") + " UK"
     else:
         ko_time = _uk(pd.Timestamp(now.tz_convert(NY).date()).tz_localize(NY) + pd.Timedelta(hours=16)).strftime("%H:%M") + " UK"
     meta = dict(key=A.key, title=A.title, icon=A.icon, live=bool(in_session), started=started, multi=multi,
@@ -486,7 +502,10 @@ def _plain(t):
 
 def rulebook(s, A):
     assets = ", ".join(a.replace("-USD", "") for a in A.dfs)
-    out = [f"Trades: {assets} on 15-minute candles. {A.extra.get('sizing_text', '')}".strip()]
+    tf = "1-hour candles (decides when each hour closes)" if s.get("tf") == "1h" else "15-minute candles"
+    out = [f"Trades: {assets} on {tf}. {A.extra.get('sizing_text', '')}".strip()]
+    if s.get("rules"):
+        return out + list(s["rules"])
     if s.get("why_l"):
         out.append("Goes LONG when: " + _plain(s["why_l"]))
     if s.get("why_s"):
@@ -494,14 +513,18 @@ def rulebook(s, A):
     if s.get("exit_l"):
         out.append("Exits when: " + _plain(s["exit_l"]))
     if s.get("stop"):
-        out.append(f"Protective stop: {s['stop']} × ATR(14) away from the entry price.")
+        out.append(f"Protective stop: {s['stop']} × {'1-hour ' if s.get('tf') == '1h' else ''}ATR(14) away from the entry price.")
     if s.get("tp"):
         out.append(f"Profit target: {s['tp']} × ATR(14) away from the entry price.")
     if s.get("intraday"):
-        out.append("Always flat by the end of the session" + (" (midnight UK)." if A.market == "crypto" else " (closing bell)."))
+        out.append("Always flat by the end of the session" + (" (midnight UK)." if A.market == "crypto" else
+                   " (16:45 New York, prop-firm rule). Trades the whole 24-hour futures day: Asia, London and New York."
+                   if A.market == "globex" else " (closing bell)."))
     else:
         out.append("Can hold positions overnight.")
-    out.append("Decides at the close of each 15-minute candle and enters at the next candle's open. Can trade again whenever its setup shows up.")
+    out.append(("Decides at the close of each 1-hour candle and enters at the next hour's open." if s.get("tf") == "1h" else
+                "Decides at the close of each 15-minute candle and enters at the next candle's open.")
+               + " Can trade again whenever its setup shows up.")
     if s.get("watch"):
         out.append("While waiting it watches for: " + _plain(s["watch"]))
     return out

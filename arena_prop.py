@@ -12,7 +12,18 @@ import numpy as np
 import pandas as pd
 
 PROP = dict(size=50000.0, dd=2000.0, rule="eod", eval_day=1500.0, eval_days=2, payday=150.0, daily_stop=1500.0,
-            max_lots=3, tiers=[(1500.0, 3), (1000.0, 2), (0.0, 1)], lock=False)
+            max_lots=3, tiers=[(1500.0, 3), (1000.0, 2), (0.0, 1)], lock=False, ramp=True, intrabar=True)
+
+
+def ramp_lots(hist):
+    """Earn the right to size up (same as the 2-year test): 1 contract to start, 2 when its last 5 trades made money,
+    3 when its last 10 trades made money with at least half of them winners."""
+    q = 1
+    if len(hist) >= 5 and sum(hist[-5:]) > 0:
+        q = 2
+    if len(hist) >= 10 and sum(hist[-10:]) > 0 and np.mean(np.array(hist[-10:]) > 0) >= 0.5:
+        q = 3
+    return q
 
 
 def lots_for(room, P):
@@ -28,6 +39,7 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
     (with lots), its open position, the account summary and the moments worth announcing."""
     n = len(master)
     o, c = master["open"].values, master["close"].values
+    hi_, lo_ = master["high"].values, master["low"].values
     if start_i >= n:
         start_i = n - 1
     dates = master["date"].values
@@ -120,12 +132,37 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
                     continue
                 room = min(last_bal - (size - dd), dd + (last_bal - day_open))
                 p["k"] = lots_for(room, P)
+                if P.get("ramp"):
+                    p["k"] = max(1, min(p["k"], ramp_lots([t["pnl"] / max(t["lots"], 1) for t in taken])))
                 if p["x"] == i:                                  # in and out on the same bar
                     realized += p["pnl1"] * p["k"]
                     taken.append(dict(entry_i=p["e"], exit_i=i, side=p["side"], entry=p["entry"], exit=p["exit"], pnl=p["pnl1"] * p["k"],
                                       exit_reason=p["reason"], in_dec=p["in_dec"], out_dec=p["out_dec"], lots=p["k"], at_close=p["reason"] == "close"))
                 else:
                     open_.append(p)
+        # the user's rule: if the account touches $48,000 at ANY moment (inside a candle too), it is lost
+        if P.get("intrabar"):
+            base = size + realized - ref
+            worst = base + sum(p["side"] * ((lo_[i] if p["side"] > 0 else hi_[i]) - p["entry"]) * pv * p["k"] - cost * p["k"]
+                               for p in open_)
+            if worst <= size - dd:
+                for p in list(open_):
+                    if len(open_) == 1:
+                        px = p["entry"] + p["side"] * ((size - dd) - base + cost * p["k"]) / (pv * p["k"])
+                        px = max(px, lo_[i]) if p["side"] > 0 else min(px, hi_[i])
+                        px = min(px, o[i]) if p["side"] > 0 else max(px, o[i])
+                    else:
+                        px = lo_[i] if p["side"] > 0 else hi_[i]
+                    close_pos(p, i, px, "blown", i, False)
+                    open_.remove(p)
+                bal = size + realized - ref
+                eq[i] = realized
+                last_bal = bal
+                dead, dead_i, dead_day = True, i, d
+                events.append(dict(t=idx[i], kind="loss", name=name, pnl=None,
+                                   text=f"BLEW THE {'FUNDED' if phase == 'funded' else 'EVALUATION'} ACCOUNT: the balance touched "
+                                        f"${size - dd:,.0f} during the candle. OUT."))
+                continue
         bal = size + realized + mtm(i) - ref
         peak = max(peak, bal)
         last_bal = bal
@@ -216,7 +253,8 @@ def simulate(master, trades, opens, start_i, P, point_value, cost_rt, raw_lots, 
                 good_days=good_days, need_days=P["eval_days"], passes=passes, funded_days=f_days, paydays=int(f_paydays),
                 funded_pnl=round(f_pnl), funded_avg=round(f_done / f_days) if f_days else None, dead=dead,
                 dead_day=str(dead_day) if dead_day is not None else None, fresh=new_funded,
-                lots_now=lots_for(bal - floor, P), halted=halted and not dead, eval_days_log=eval_days_log)
+                lots_now=(max(1, min(lots_for(bal - floor, P), ramp_lots([t["pnl"] / max(t["lots"], 1) for t in taken])))
+                          if P.get("ramp") else lots_for(bal - floor, P)), halted=halted and not dead, eval_days_log=eval_days_log)
     tk = pd.DataFrame(taken, columns=["entry_i", "exit_i", "side", "entry", "exit", "pnl", "exit_reason", "in_dec", "out_dec", "lots", "at_close"])
     return eq, tk, open_out, info, events, dead_day
 

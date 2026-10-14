@@ -490,12 +490,21 @@ def row_at(df, i):
 
 def exit_text(strat, side, reason, px, row):
     if reason == "stop":
+        if strat.get("engine"):
+            return f"Stopped out at {px:,.2f}: price went through the value-area stop."
         return f"Stopped out at {px:,.2f}. The protective stop ({strat['stop']}× ATR) was hit."
+    if reason == "breakeven":
+        return f"Breakeven stop at {px:,.2f}: it had moved its stop to the entry price, so no loss (only costs)."
+    if reason == "trail":
+        return f"Trailing stop hit at {px:,.2f}, locking in the move."
     if reason == "target":
         return f"Profit target hit at {px:,.2f}."
     if reason == "close":
-        return (f"End of the day: closed at {px:,.2f}." if strat.get("market") == "crypto"
-                else f"Closing bell: closed at {px:,.2f}. It never holds overnight.")
+        if strat.get("market") == "crypto":
+            return f"End of the day: closed at {px:,.2f}."
+        if row is not None and getattr(row, "df", None) is not None and row.df.attrs.get("market") == "globex":
+            return f"16:45 New York: closed at {px:,.2f}. Prop rule: flat before the daily break."
+        return f"Closing bell: closed at {px:,.2f}. It never holds overnight."
     if reason == "flip":
         return f"Signal flipped the other way at {px:,.2f}."
     if reason == "daily_stop":
@@ -505,7 +514,7 @@ def exit_text(strat, side, reason, px, row):
     if reason == "payday":
         return f"Payday goal reached, flat at {px:,.2f}."
     if reason == "blown":
-        return f"Account blown at the close ({px:,.2f}): it lost $2,000 in the day or closed at/below $48,000."
+        return f"Account blown at {px:,.2f}: the balance touched $48,000 (or it lost $2,000 in a day)."
     if reason == "passed":
         return f"Passed the evaluation: closed at {px:,.2f} before switching to the funded account."
     tmpl = strat.get("exit_l") if side > 0 else strat.get("exit_s")
@@ -527,6 +536,9 @@ def backtest(df, strat, point_value=2.0, cost_rt=2.50, contracts=1, notional=Non
     Sizing: futures = point_value x contracts; stocks/crypto = a fixed $ notional per trade.
     Costs: cost_rt dollars per round trip, or cost_pct of the notional.
     Every trade stores why it went in and why it came out, in plain English."""
+    if strat.get("engine"):
+        return strat["engine"](df, strat, point_value=point_value, cost_rt=cost_rt, contracts=contracts, notional=notional,
+                               cost_pct=cost_pct, asset=asset)
     if tgt is None:
         tgt = strat["fn"](df)
     fresh = None
@@ -535,7 +547,7 @@ def backtest(df, strat, point_value=2.0, cost_rt=2.50, contracts=1, notional=Non
     tgt = np.nan_to_num(np.asarray(tgt, float))
     fresh = np.zeros(len(tgt)) if fresh is None else np.asarray(fresh, float)
     o, h, l, c = (df[x].values for x in ("open", "high", "low", "close"))
-    atr = df["atr"].values
+    atr = df[strat.get("atr_col") or "atr"].values
     last = df["last"].values
     idx = df.index
     n = len(df)

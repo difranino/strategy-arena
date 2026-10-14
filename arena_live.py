@@ -11,6 +11,7 @@ import arena_social as SOC
 import arena_world as AW
 import arena_meme as MEME
 import arena_ict as ICT
+import arena_flow as FL
 import arena_hub as H
 
 NY, UK = "America/New_York", "Europe/London"
@@ -87,45 +88,49 @@ def _prep(raw, market, now):
 
 class Settings:
     def __init__(self, **kw):
-        self.__dict__.update(dict(nq_start="2026-10-07", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
+        self.__dict__.update(dict(nq_start="2026-10-12", new_start="2026-10-09", ko_nq=3, ko_stocks=3, ko_crypto=3,
                                   ko_hype=1, nq_symbol="NQ=F", point_value=20.0, nq_contracts=3, nq_cost=14.0, stock_size=10000.0,
                                   stock_cost_pct=0.0005, crypto_size=10000.0, crypto_cost_pct=0.0015,
                                   finals_at="2026-10-23T21:00:00+01:00", repo="difranino/strategy-arena",
                                   risk_limits={"nq": 2000, "stocks": 1500, "crypto": 1000, "hype": 1500},
                                   prop={"nq": dict(PR.PROP)},
-                                  revive={"nq": {"Overnight Drift": "2026-10-12"}}, monkeys=20, grace=3,
+                                  revive={}, monkeys=20, grace=3,
                                   news_join="2026-10-13", ict_join="2026-10-14"))
         self.__dict__.update(kw)
 
 
-def build_nq(st, folder, now, raw=None):
+def build_nq(st, folder, now, raw=None, m1=None, qqq=None):
+    """Nasdaq tower v2: the 24-hour futures day (18:00-16:45 New York) on 15-min candles.
+    3 survivors of the 2-year prop test on 1-hour candles + 2 order-flow fighters on 15-min candles."""
     if raw is None:
         got = load_symbols([st.nq_symbol], folder, prepost=True)
         raw = got.get(st.nq_symbol)
         if raw is None:
             got = load_symbols(["MNQ=F"], folder, prepost=True)
             raw = got["MNQ=F"]
-    df = C.drop_unfinished(C.prepare(raw, "rth"), now)
-    try:  # roll guard: compare with QQQ to remove contract-roll jumps
-        ref = C.prepare(load_symbols(["QQQ"], folder)["QQQ"], "rth")
-        df, rolls = C.roll_adjust(df, ref)
+    df = C.drop_unfinished(C.prepare(raw, "globex"), now)
+    try:  # roll guard: the NQ/QQQ price ratio steps when Yahoo switches contract
+        if qqq is None:
+            qqq = load_symbols(["QQQ"], folder)["QQQ"]
+        df, rolls = FL.roll_adjust_ratio(df, qqq)
         if rolls:
             print("Futures roll adjusted:", rolls)
     except Exception as e:
         print(f"Roll guard skipped ({e}).")
     df = C.add_indicators(df)
-    ICT.add_ict_cols(df)
     df["asset"] = "NQ"
-    ict = ICT.roster()
-    for s_ in ict:
-        s_["joins"] = getattr(st, "ict_join", None)
-    A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, NQS.original_roster() + ict, NQS.challenger_pool(),
+    if m1 is None:
+        m1 = FL.load_1m(folder)
+    FL.add_flow_cols(df, m1)
+    FL.build_h1(df)
+    lib = {s_["name"]: s_ for s_ in NQS.original_roster() + NQS.challenger_pool()}
+    roster = FL.hourly_roster(lib) + FL.flow_roster()
+    A = SE.Arena("nq", "Nasdaq Futures", "⚡", {"NQ": df}, df, roster, [],
                  NQS.benchmark(), SE.Cfg(st.nq_start, ko_per_day=st.ko_nq, grace=st.grace, revive=st.revive.get("nq")),
-                 dict(point_value=st.point_value, cost_rt=st.nq_cost, contracts=st.nq_contracts), market="rth", unit_label="contract",
+                 dict(point_value=st.point_value, cost_rt=st.nq_cost, contracts=st.nq_contracts), market="globex", unit_label="contract",
                  risk_limit=st.risk_limits.get("nq", 1000), monkeys=NQS.monkeys(st.monkeys), prop=st.prop.get("nq"),
-                 extra=dict(sizing_text=(f"{st.nq_contracts} NQ mini contracts (${st.point_value:g} per point each = "
-                                         f"${st.point_value * st.nq_contracts:g} per point), ${st.nq_cost:g} costs per contract per round trip "
-                                         f"(${st.nq_cost * st.nq_contracts:g} per trade).")))
+                 extra=dict(sizing_text=(f"Up to {st.nq_contracts} NQ mini contracts (${st.point_value:g} per point each), "
+                                         f"${st.nq_cost:g} costs per contract per round trip. 24-hour futures day, flat by 16:45 New York.")))
     return A
 
 
