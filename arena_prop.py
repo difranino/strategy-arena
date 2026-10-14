@@ -5,13 +5,13 @@
 #   OUT         checked at each day's close: a day that loses $2,000 or more, or a balance closing at/below $48,000
 # The bot's rules on top of the firm's rules:
 #   LOT SIZE    max 3 NQ minis, fewer when it's close to the $2,000 limit
-#   DAILY STOP  flat for the rest of the day after losing $600 in a day
+#   DAILY STOP  flat for the rest of the day after losing $1,500 in a day
 #   DAILY GOAL  in evaluation, flat for the day once it is +$1,500 (locks in a passing day)
 # Decisions use only what was known at a bar's close; forced exits fill at the next bar's open.
 import numpy as np
 import pandas as pd
 
-PROP = dict(size=50000.0, dd=2000.0, rule="eod", eval_day=1500.0, eval_days=2, payday=150.0, daily_stop=600.0,
+PROP = dict(size=50000.0, dd=2000.0, rule="eod", eval_day=1500.0, eval_days=2, payday=150.0, daily_stop=1500.0,
             max_lots=3, tiers=[(1500.0, 3), (1000.0, 2), (0.0, 1)], lock=False)
 
 

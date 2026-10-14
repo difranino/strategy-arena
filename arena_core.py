@@ -10,11 +10,11 @@ UK = "Europe/London"
 
 
 # ---------------------------------------------------------------- data prep
-def prepare(raw, market="rth"):
+def prepare(raw, market="rth", bar=15):
     """raw: DataFrame with Open/High/Low/Close/Volume and a DatetimeIndex.
     market="rth": US regular hours 15-min bars (9:30 to 15:45 bar starts), sessions in New York time.
     market="crypto": 24/7 15-min bars, one session = one UK calendar day (00:00-24:00 London)."""
-    tz = NY if market == "rth" else UK
+    tz = NY if market in ("rth", "globex") else UK
     df = raw.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].copy()
     idx = df.index
     if idx.tz is None:
@@ -22,22 +22,33 @@ def prepare(raw, market="rth"):
     df.index = idx.tz_convert(tz)
     df = df[~df.index.duplicated(keep="last")].sort_index()
     mins = df.index.hour * 60 + df.index.minute
-    df = df[mins % 15 == 0]
+    df = df[mins % bar == 0]
     mins = df.index.hour * 60 + df.index.minute
     if market == "rth":
         df = df[(mins >= 9 * 60 + 30) & (mins <= 15 * 60 + 45)]
         df = df[df.index.dayofweek < 5]
+    if market == "globex":
+        # CME futures day: 18:00 New York (Asia open) to 16:45 (prop firms want you flat by then)
+        df = df[(mins >= 18 * 60) | (mins < 16 * 60 + 45)]
     df = df.dropna(subset=["open", "high", "low", "close"])
     df["volume"] = df["volume"].fillna(0)
-    df["date"] = df.index.date
+    if market == "globex":
+        df["date"] = (df.index + pd.Timedelta(hours=6)).date       # 18:00 belongs to the NEXT trading day
+        df = df[pd.to_datetime(pd.Series(df["date"], index=df.index)).dt.dayofweek < 5]
+    else:
+        df["date"] = df.index.date
     cnt = df.groupby("date")["close"].transform("size")
-    keep_n = 20 if market == "rth" else 80
+    keep_n = 20 if market == "rth" else round(60 * 15 / bar) if market == "globex" else 80
     df = df[(cnt >= keep_n) | (df["date"] == df["date"].iloc[-1])].copy()
     m = df.index.hour * 60 + df.index.minute
     if market == "rth":
         df["k"] = (m - (9 * 60 + 30)) // 15  # 0 = 9:30 bar
         df["nbars"] = 26
         df["last"] = df["k"] == 25  # the 15:45-16:00 bar
+    elif market == "globex":
+        df["k"] = ((m - 18 * 60) % 1440) // 15  # 15-minute slot of the day: 0 = 18:00 New York (Asia open)
+        df["nbars"] = round(91 * 15 / bar)
+        df["last"] = m == ((16 * 60 + 44) // bar) * bar  # the bar that ends the day (16:30 on 15-min, 16:00 on 1-hour)
     else:
         df["k"] = m // 15  # 0 = 00:00 UK bar
         df["nbars"] = 96
@@ -45,7 +56,8 @@ def prepare(raw, market="rth"):
     ny = df.index.tz_convert(NY)
     df["ny_mins"] = ny.hour * 60 + ny.minute
     df.attrs["market"] = market
-    df.attrs["bpd"] = 26 if market == "rth" else 96
+    df.attrs["bpd"] = 26 if market == "rth" else round(91 * 15 / bar) if market == "globex" else 96
+    df.attrs["bar"] = bar
     return df
 
 
@@ -67,14 +79,28 @@ def roll_adjust(fut, ref, threshold=0.0025):
     shifts = np.zeros(len(fut))
     log = []
     c = fut["close"].values
+    bar_fix = []
     for i in jumps:
         if i == 0:
             continue
         gap = c[i] - c[i - 1] * (1 + rq.values[i])
         shifts[:i] += gap
+        bar_fix.append((i, gap))
         log.append((idx[i], round(float(gap), 2)))
     for col in cols:
         fut[col] = fut[col].values + shifts
+    # Yahoo often switches contracts in the MIDDLE of a candle: that candle opens on the old contract and
+    # closes on the new one. Move its open (and the extreme on the old side) onto the new contract's level.
+    o, h, l, cl = (fut[k].values.copy() for k in cols)
+    for i, gap in bar_fix:
+        o[i] += gap
+        if gap > 0:
+            l[i] += gap
+        else:
+            h[i] += gap
+        h[i] = max(h[i], o[i], cl[i])
+        l[i] = min(l[i], o[i], cl[i])
+    fut["open"], fut["high"], fut["low"] = o, h, l
     return fut, log
 
 
@@ -473,7 +499,7 @@ def exit_text(strat, side, reason, px, row):
     if reason == "flip":
         return f"Signal flipped the other way at {px:,.2f}."
     if reason == "daily_stop":
-        return f"Daily stop: it hit its $600 daily loss limit, so it went flat at {px:,.2f} and stopped for today."
+        return f"Daily stop: it hit its $1,500 daily loss limit, so it went flat at {px:,.2f} and stopped for today."
     if reason == "daily_goal":
         return f"Daily goal: +$1,500 on the day (a passing evaluation day), so it banked it at {px:,.2f}."
     if reason == "payday":

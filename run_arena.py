@@ -12,6 +12,39 @@ os.makedirs(out_dir, exist_ok=True)
 cfg = json.load(open("settings.json")) if os.path.exists("settings.json") else {}
 st = AL.Settings(**cfg)
 t0 = time.time()
+
+
+def save_long_history(folder):
+    """Once a day: keep 2 years of hourly Nasdaq futures (and QQQ) for long backtests. Never blocks the city."""
+    try:
+        import yfinance as yf
+        for sym, name, interval, period, pre in [("NQ=F", "hist_NQ_F_60m.csv", "60m", "730d", True),
+                                                 ("QQQ", "hist_QQQ_60m.csv", "60m", "730d", False),
+                                                 ("NQ=F", "hist_NQ_F_1d.csv", "1d", "10y", False)]:
+            path = os.path.join(folder, name)
+            if os.path.exists(path):
+                last = pd.read_csv(path, index_col=0).index[-1]
+                if (pd.Timestamp.now(tz="UTC") - pd.to_datetime(last, utc=True)).total_seconds() < 20 * 3600:
+                    continue
+            x = yf.download(sym, period=period, interval=interval, prepost=pre, auto_adjust=False, progress=False)
+            if isinstance(x.columns, pd.MultiIndex):   # pick whichever level holds Open/High/Low/Close
+                lv = [i for i in range(x.columns.nlevels) if "Close" in x.columns.get_level_values(i)]
+                x.columns = x.columns.get_level_values(lv[0] if lv else 0)
+            x = x.loc[:, ~x.columns.duplicated()]
+            x = x[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
+            if os.path.exists(path):
+                old = pd.read_csv(path, index_col=0)
+                old.index = pd.to_datetime(old.index, utc=True)
+                x.index = pd.to_datetime(x.index, utc=True)
+                x = pd.concat([old, x])
+                x = x[~x.index.duplicated(keep="last")].sort_index()
+            x.to_csv(path)
+            print(f"Long history saved: {name} ({len(x)} bars)")
+    except Exception as e:
+        print(f"Long history skipped ({e}).")
+
+
+save_long_history(state_dir)
 html, cache, errs = AL.build_all(st, state_dir, pd.Timestamp.now(tz="America/New_York"), reload_sec=300)
 banner = ""
 if errs:

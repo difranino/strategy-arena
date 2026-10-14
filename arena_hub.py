@@ -665,11 +665,11 @@ function towerHTML(k, i){
       <span class="mu">🐒 monkeys ${money((a.monkeys||{}).median)}</span>${a.prop?`<br><span class="mu">💼 ${a.prop.n_funded} funded · 📝 ${a.prop.n_eval} in eval</span>`:''}</div>
   </div>`;
 }
-// ======================= MEME COIN DEN (copy-trading tower) =======================
+// ======================= MEME COIN DEN (own strategy) =======================
 function memeTowerHTML(){
   const Z=D.meme; if(!Z) return '';
-  const lit=(Z.traders||[]).map(t=>`<i class="win ${t.open?'w-gold':t.pnl>0?'w-green':t.pnl<0?'w-pink':'w-on'}" title="${esc(t.name)} ${money(t.pnl)}"></i>`).join('')
-            + (Z.positions||[]).slice(0,11).map(p=>`<i class="win ${p.pnl>=0?'w-green':'w-pink'}" title="${esc(p.symbol)} ${money(p.pnl)}"></i>`).join('');
+  const lit=(Z.positions||[]).map(p=>`<i class="win ${p.pnl>=0?'w-green':'w-pink'}" title="${esc(p.symbol)} ${money(p.pnl)}"></i>`).join('')
+            + Array.from({length:Math.max(0,5-(Z.positions||[]).length)},()=>'<i class="win w-on"></i>').join('');
   return `<div class="tw-wrap" data-meme="1">
     <div class="neon" style="--c:#9dff3e">🐸 MEME COIN DEN</div>
     <div class="tower" style="--c:#9dff3e;--g:#24440c;height:170px">
@@ -678,40 +678,39 @@ function memeTowerHTML(){
       <div class="wins">${lit}</div>
       <div class="door"><span>24/7</span></div>
     </div>
-    <div class="tw-info"><b>Meme Coins</b> <span class="dot on"></span>copying<br>
-      <span class="mu">5 traders copied · ${(Z.positions||[]).length} coins held</span><br>
+    <div class="tw-info"><b>Meme Coins</b> <span class="dot on"></span>hunting<br>
+      <span class="mu">${(Z.positions||[]).length} of 5 coins held · ${Z.closed.n} closed</span><br>
       <span class="mu">started $${Z.start_cash.toLocaleString('en-GB')} · <span class="${cls(Z.pnl)}">${money(Z.pnl)}</span></span></div>
   </div>`;
 }
 function memeView(){
-  const Z=D.meme;
-  const traders=(Z.traders||[]).map(t=>`<div class="mt">
-      <div class="mt-h">${guy({name:t.name,cls:'Momentum'},'')}<div><b>${esc(t.name)}</b><br><a class="mu" href="https://solscan.io/account/${esc(t.wallet)}" target="_blank" rel="noopener">${esc(t.wallet.slice(0,4))}…${esc(t.wallet.slice(-4))} ↗</a></div></div>
-      <div class="mt-p ${cls(t.pnl)}">${money(t.pnl)}</div>
-      <div class="mu" style="font-size:11px">${t.copies} copied · ${t.wins}W–${t.losses}L · ${t.open} open<br>banked ${money(t.realized)} · open ${money(t.open_pnl)}</div></div>`).join('');
-  const pos=(Z.positions||[]).length?`<table><tr><th>Coin</th><th>Copied from</th><th>Value</th><th>P&amp;L</th><th>Since</th></tr>${Z.positions.map(p=>`<tr><td><a href="https://dexscreener.com/solana/${esc(p.mint)}" target="_blank" rel="noopener"><b>${esc(p.symbol)}</b> ↗</a></td><td>${esc(p.trader)}</td><td>${money(p.value,false)}</td><td class="${cls(p.pnl)}">${money(p.pnl)}</td><td class="mu">${esc(p.opened)}</td></tr>`).join('')}</table>`:'<div class="empty">No coins held right now. We buy when one of the 5 traders buys.</div>';
-  const R_=Z.rules||{};
+  const Z=D.meme, R_=Z.rules||{}, C=Z.closed||{n:0,wins:0,losses:0,realized:0};
+  const pct=x=>`${x>0?'+':''}${Math.round(x)}%`;
+  const pos=(Z.positions||[]).length?`<table><tr><th>Coin</th><th>Put in</th><th>Worth now</th><th>Up / down</th><th>Bought</th></tr>${Z.positions.map(p=>`<tr><td><a href="https://dexscreener.com/solana/${esc(p.mint)}" target="_blank" rel="noopener"><b>${esc(p.symbol)}</b> ↗</a></td><td>${money(p.cost,false)}</td><td>${money(p.value,false)}</td><td class="${cls(p.pnl)}">${money(p.pnl)} (${pct(p.chg)})</td><td class="mu">${esc(p.opened)}</td></tr>`).join('')}</table>`:'<div class="empty">No coins right now: nothing passes the filters. The money waits in cash.</div>';
+  const tr=(Z.trades||[]).length?`<table><tr><th>When</th><th>Coin</th><th>Action</th><th>Amount</th><th>Made / lost</th></tr>${Z.trades.map(t=>`<tr><td class="mu">${esc(t.t)}</td><td><b>${esc(t.symbol)}</b></td><td class="${t.side==='BUY'?'up':'dn'}">${t.side}</td><td>${money(t.usd,false)}</td><td class="${cls(t.pnl)}">${t.pnl==null?'–':money(t.pnl)}</td></tr>`).join('')}</table>`:'<div class="empty">No trades yet.</div>';
+  const watch=(Z.watch||[]).length?`<table><tr><th>Coin</th><th>1h</th><th>6h</th><th>24h</th><th>Volume 24h</th></tr>${Z.watch.map(w=>`<tr><td><a href="https://dexscreener.com/solana/${esc(w.mint)}" target="_blank" rel="noopener"><b>${esc(w.symbol)}</b> ↗</a>${w.held?' <span class="up">● held</span>':''}</td><td class="${cls(w.h1)}">${pct(w.h1)}</td><td class="${cls(w.h6)}">${pct(w.h6)}</td><td class="${cls(w.h24)}">${pct(w.h24)}</td><td>$${(w.vol24/1e6).toFixed(1)}M</td></tr>`).join('')}</table>`:'<div class="empty">No coin passes the filters right now.</div>';
   return `<div class="tower-in" style="--c:#9dff3e;--g:#24440c">
     <div class="tin-top"><button class="btn" data-go="city">← City</button><div class="tin-name px">🐸 MEME COIN DEN</div>
       <div><span class="pill live"><i></i>24/7</span></div><span></span></div>
     ${countdown()}
     <div class="meme-hero">
-      <div class="box"><h4 class="px">💰 OUR COPY ACCOUNT (paper money)</h4>
+      <div class="box"><h4 class="px">💰 THE ACCOUNT (paper money)</h4>
         <div class="mh-big ${cls(Z.pnl)}">${money(Z.equity,false)}</div>
         <div class="mu">started with $${Z.start_cash.toLocaleString('en-GB')} on ${esc(Z.started||'')} · total <span class="${cls(Z.pnl)}">${money(Z.pnl)}</span> · last 24h <span class="${cls(Z.today)}">${money(Z.today)}</span> · cash ${money(Z.cash,false)}</div>
+        <div class="mu" style="margin-top:4px">Closed trades: ${C.n} · ${C.wins} won · ${C.losses} lost · banked <span class="${cls(C.realized)}">${money(C.realized)}</span></div>
         <div style="margin-top:8px">${spark((Z.curve||[]).map(v=>v-Z.start_cash),520,60)}</div>
         <div class="mu" style="font-size:11px;margin-top:6px">Updated ${esc(Z.updated||'–')} UK${Z.status&&Z.status!=='OK'?` · ⚠ ${esc(Z.status)}`:''}</div></div>
-      <div class="box rules"><h4 class="px">📜 THE ONE STRATEGY</h4><ul>
-        <li>We copy the <b>top 5 traders of Kolscan's monthly memecoin leaderboard</b> (their public Solana wallets).</li>
-        <li><b>They buy → we buy</b> ${Math.round((R_.copy_pct||0.1)*100)}% of our account in the same coin. <b>They sell → we sell</b> the same share of it.</li>
-        <li>We ignore their tiny buys (under ${R_.min_sol||0.5} SOL or $50) and coins with less than $${(R_.min_liq||10000).toLocaleString('en-GB')} of liquidity.</li>
-        <li>Costs: ${((R_.fee||0.015)*100).toFixed(1)}% on every buy and sell. Paper money only: nothing is bought for real.</li>
-        <li><b>Honest delay:</b> the city checks every 15–30 minutes, so we buy and sell at the price when WE see it, not theirs. In memecoins that delay can cost a lot. This tower measures exactly how much.</li>
+      <div class="box rules"><h4 class="px">📜 MEME MOMENTUM HUNTER</h4><ul>
+        <li>Scans the <b>trending Solana coins</b> every update and keeps <b>all $1,000 working</b>: up to ${R_.max_coins} coins, the cash split equally.</li>
+        <li><b>Buys</b> coins rising steadily (+3% to +40% in 1 hour, +10% or more in 6 hours, up on the day) with at least $${((R_.min_vol||5e5)/1e6).toFixed(1)}M of daily volume, $${((R_.min_liq||1e5)/1e3).toFixed(0)}k liquidity and older than ${R_.min_age||24} hours (most rug-pulls happen in the first day).</li>
+        <li><b>Sells</b> at ${Math.round((R_.stop||-0.2)*100)}% (stop loss), +${Math.round((R_.take||0.6)*100)}% (take profit), if it drops ${Math.round((R_.trail||0.2)*100)}% from its best after being up ${Math.round((R_.trail_arm||0.3)*100)}%, if it falls 12% in an hour, or after ${R_.max_hold||48} hours.</li>
+        <li>Costs ${((R_.fee||0.015)*100).toFixed(1)}% on every buy and sell. Checks every 15–30 minutes, so it buys and sells at the price when it looks. Paper money only.</li>
       </ul></div>
     </div>
-    <div class="box" style="margin-top:12px"><h4 class="px">👥 THE 5 TRADERS WE COPY · our profit from copying each one</h4><div class="mts">${traders}</div></div>
     <div class="two" style="margin-top:12px"><div class="box"><h4 class="px">🪙 COINS WE HOLD</h4><div class="memepos">${pos}</div></div>
-      <div class="box"><h4 class="px">⚔ COPY LOG</h4><div class="feed" style="max-height:420px">${feedHTML(Z.feed||[])}</div></div></div>
+      <div class="box"><h4 class="px">🔭 TOP TRENDING COINS THAT PASS THE FILTERS</h4><div class="memepos">${watch}</div></div></div>
+    <div class="two" style="margin-top:12px"><div class="box"><h4 class="px">🧾 EVERY TRADE</h4><div class="memepos" style="max-height:420px;overflow:auto">${tr}</div></div>
+      <div class="box"><h4 class="px">⚔ WHAT HAPPENED</h4><div class="feed" style="max-height:420px">${feedHTML(Z.feed||[])}</div></div></div>
   </div>`;
 }
 function hallOfFame(){
