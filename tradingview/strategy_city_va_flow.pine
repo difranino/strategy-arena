@@ -1,0 +1,233 @@
+//@version=5
+// STRATEGY CITY - VA FLOW: "VA Trend Rider" + "VA Machine Gun (1:1)"  (MNQ, 15-minute chart)
+// From the video method: every candle gets its own volume profile (value area = 70% of the volume, POC = busiest price),
+// rebuilt from its 1-minute candles. Delta is estimated from where each 1-minute candle closed in its range
+// (TradingView has no real bid/ask delta here). "NASDAQ Effort" is private: stand-in = delta of the last 3 candles.
+// Arrows = past buys/sells. Full list: Strategy Tester > List of trades. A testing tool, not trading advice.
+strategy("Strategy City - VA Flow", shorttitle="SC VA Flow", overlay=true, initial_capital=50000, currency=currency.USD, process_orders_on_close=true, commission_type=strategy.commission.cash_per_contract, commission_value=1.25, default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0, max_bars_back=500)
+
+setup = input.string("Trend Rider", "Setup", options=["Trend Rider", "Machine Gun 1:1", "Both"])
+ltf = input.timeframe("1", "Candles used to build each profile")
+riskUSD = input.float(500, "Risk per trade ($)", minval=50, step=50)
+maxQty = input.int(40, "Max contracts", minval=1)
+dayLoss = input.float(1500, "Daily loss limit ($)", minval=100, step=100)
+binSz = input.float(1.0, "Profile bucket (points)", minval=0.25, step=0.25)
+showLv = input.bool(true, "Show session value area + VWAP")
+showCv = input.bool(false, "Show each candle's value area")
+
+useTR = setup != "Machine Gun 1:1"
+useMG = setup != "Trend Rider"
+NY = "America/New_York"
+tick = syminfo.mintick
+
+// ---------------------------------------------------------------- volume profile helpers
+// spread each small candle's volume evenly over the price buckets it traded through
+candleHist(los, his, vos) =>
+    n = array.size(los)
+    int b0 = 0
+    hist = array.new_float(0)
+    if n > 0
+        b0 := int(math.floor(array.min(los) / binSz))
+        nb = int(math.floor(array.max(his) / binSz)) - b0 + 1
+        hist := array.new_float(nb, 0.0)
+        for i = 0 to n - 1
+            a = int(math.floor(array.get(los, i) / binSz)) - b0
+            b = int(math.floor(array.get(his, i) / binSz)) - b0
+            v = array.get(vos, i) / (b - a + 1)
+            for j = a to b
+                array.set(hist, j, array.get(hist, j) + v)
+    [b0, hist]
+
+// value area: start at the busiest bucket (POC), grow toward the busier side until 70% of the volume is inside
+valueArea(hist, b0) =>
+    nb = array.size(hist)
+    float vaL = na
+    float vaH = na
+    float poc = na
+    if nb > 0
+        tot = array.sum(hist)
+        p = array.indexof(hist, array.max(hist))
+        lo = p
+        hi = p
+        inside = array.get(hist, p)
+        while tot > 0 and inside < 0.7 * tot and (lo > 0 or hi < nb - 1)
+            up = hi < nb - 1 ? array.get(hist, hi + 1) : -1.0
+            dn = lo > 0 ? array.get(hist, lo - 1) : -1.0
+            if up >= dn
+                hi += 1
+                inside += up
+            else
+                lo -= 1
+                inside += dn
+        vaL := (b0 + lo) * binSz
+        vaH := (b0 + hi + 1) * binSz
+        poc := (b0 + p + 0.5) * binSz
+    [vaL, vaH, poc]
+
+// ---------------------------------------------------------------- this candle's profile and delta
+[los, his, ops, cls, vos] = request.security_lower_tf(syminfo.tickerid, ltf, [low, high, open, close, volume])
+[b0, hist] = candleHist(los, his, vos)
+[vaL, vaH, poc] = valueArea(hist, b0)
+float cdelta = na
+float cvol = na
+if array.size(los) > 0
+    d = 0.0
+    tv = 0.0
+    for i = 0 to array.size(los) - 1
+        r = array.get(his, i) - array.get(los, i)
+        clv = r > 0 ? (2 * array.get(cls, i) - array.get(his, i) - array.get(los, i)) / r : math.sign(array.get(cls, i) - array.get(ops, i))
+        d += array.get(vos, i) * clv
+        tv += array.get(vos, i)
+    cdelta := d
+    cvol := tv
+
+// ---------------------------------------------------------------- session (18:00 New York) profile so far
+nyH = hour(time, NY)
+nyM = minute(time, NY)
+firstBar = nyH == 18 and nyM == 0
+var sh = array.new_float(0)
+var int sB0 = 0
+if firstBar
+    array.clear(sh)
+if array.size(hist) > 0
+    if array.size(sh) == 0
+        sB0 := b0
+    while b0 < sB0
+        array.unshift(sh, 0.0)
+        sB0 -= 1
+    while b0 + array.size(hist) > sB0 + array.size(sh)
+        array.push(sh, 0.0)
+    for j = 0 to array.size(hist) - 1
+        idx = b0 - sB0 + j
+        array.set(sh, idx, array.get(sh, idx) + array.get(hist, j))
+float sVAL = na
+float sVAH = na
+if array.size(sh) > 0
+    [a1, a2, a3] = valueArea(sh, sB0)
+    sVAL := a1
+    sVAH := a2
+
+// ---------------------------------------------------------------- shared readings
+atr = ta.atr(14)
+vwap = ta.vwap(hlc3)
+slot = math.floor((((nyH * 60 + nyM - 18 * 60) % 1440) + 1440) % 1440 / 15)
+window = slot >= 1 and slot <= 87                                           // no entries at 18:00 or after 15:45 New York
+lastBar = nyH == 16 and nyM == 30                                     // the 16:30 candle ends at 16:45: flat
+greenD = close > open and cdelta > 0
+redD = close < open and cdelta < 0
+avgV = ta.sma(cvol, 20)
+body = math.abs(close - open)
+rng = high - low
+absorb = cvol >= 1.3 * avgV and body <= 0.35 * rng
+absSell = (absorb and cdelta < 0) or (cdelta < 0 and close >= open)
+absBuy = (absorb and cdelta > 0) or (cdelta > 0 and close <= open)
+effort = math.sum(nz(cdelta), 3)
+
+// value-area direction: did this candle's value area move higher (+1) or lower (-1) than the previous one?
+vaMid = (vaL + vaH) / 2
+var float dir = 0.0
+prevDir = firstBar ? 0.0 : dir
+rawDir = firstBar or na(vaMid) or na(vaMid[1]) ? 0.0 : math.sign(vaMid - vaMid[1])
+dir := firstBar ? 0.0 : rawDir != 0 ? rawDir : na(vaMid) ? 0.0 : dir
+
+// ---------------------------------------------------------------- Machine Gun signals
+mgL = useMG and window and dir == 1 and greenD and effort > 0
+mgS = useMG and window and dir == -1 and redD and effort < 0
+mgFreshL = mgL and prevDir == -1
+mgFreshS = mgS and prevDir == 1
+mgStopL = vaL - tick
+mgStopS = vaH + tick
+mgRR = (mgL and absSell) or (mgS and absBuy) ? 2.0 : 1.0
+
+// ---------------------------------------------------------------- Trend Rider signals
+lvlL = math.max(vwap, nz(sVAH, vwap))
+lvlS = math.min(vwap, nz(sVAL, vwap))
+trL = useTR and window and close > sVAH and low <= lvlL + 0.25 * atr and (absSell or absSell[1] or absSell[2]) and greenD
+trS = useTR and window and close < sVAL and high >= lvlS - 0.25 * atr and (absBuy or absBuy[1] or absBuy[2]) and redD
+trStopL = math.min(low, lvlL) - tick
+trStopS = math.max(high, lvlS) + tick
+
+// ---------------------------------------------------------------- trade bookkeeping
+var string cur = ""
+var float ent = na
+var float stp = na
+var float tgt = na
+var int conf = 0
+var int lastWin = 0
+var int entBar = na
+if firstBar
+    lastWin := 0
+// what happened to the last closed trade (target = allowed to fire again the same way)
+if strategy.closedtrades > nz(strategy.closedtrades[1])
+    xc = strategy.closedtrades.exit_comment(strategy.closedtrades - 1)
+    sz = strategy.closedtrades.size(strategy.closedtrades - 1)
+    lastWin := xc == "TARGET" ? (sz > 0 ? 1 : -1) : 0
+    cur := strategy.position_size == 0 ? "" : cur
+
+// Trend Rider management: breakeven after 1 confirming delta candle, then trail behind the second-to-last candle
+if cur == "TR" and strategy.position_size != 0 and bar_index > entBar
+    side = strategy.position_size > 0 ? 1 : -1
+    if (side > 0 and greenD) or (side < 0 and redD)
+        conf += 1
+    if conf >= 1
+        stp := side > 0 ? math.max(stp, ent) : math.min(stp, ent)
+    if conf >= 2 and bar_index - 1 > entBar
+        stp := side > 0 ? math.max(stp, low[1] - tick) : math.min(stp, high[1] + tick)
+
+// ---------------------------------------------------------------- entries
+posL = strategy.position_size > 0
+posS = strategy.position_size < 0
+flat = strategy.position_size == 0
+goTRL = trL and not posL and not lastBar
+goTRS = trS and not posS and not lastBar and not goTRL
+goMGL = not goTRL and not goTRS and mgL and (flat or posS) and (mgFreshL or (flat and lastWin == 1)) and not lastBar
+goMGS = not goTRL and not goTRS and not goMGL and mgS and (flat or posL) and (mgFreshS or (flat and lastWin == -1)) and not lastBar
+newStop = goTRL ? trStopL : goTRS ? trStopS : goMGL ? mgStopL : goMGS ? mgStopS : na
+risk = math.abs(close - newStop)
+qty = na(risk) or risk <= 2 * tick ? 0 : math.min(maxQty, math.round(riskUSD / (risk * syminfo.pointvalue)))
+strategy.risk.max_intraday_loss(dayLoss, strategy.cash)
+if (goTRL or goTRS or goMGL or goMGS) and qty >= 1
+    isL = goTRL or goMGL
+    cur := goTRL or goTRS ? "TR" : "MG"
+    ent := close
+    stp := newStop
+    tgt := cur == "MG" ? close + (isL ? 1 : -1) * mgRR * risk : na
+    conf := 0
+    entBar := bar_index
+    lastWin := 0
+    tag = (cur == "TR" ? "TR " : "MG ") + (isL ? "BUY " : "SELL ") + str.tostring(qty)
+    strategy.entry(isL ? "Long" : "Short", isL ? strategy.long : strategy.short, qty=qty, comment=tag)
+
+// ---------------------------------------------------------------- exits
+if cur == "MG"
+    strategy.cancel("tL")
+    strategy.cancel("tS")
+    strategy.exit("xL", from_entry="Long", stop=stp, limit=tgt, comment_loss="STOP", comment_profit="TARGET")
+    strategy.exit("xS", from_entry="Short", stop=stp, limit=tgt, comment_loss="STOP", comment_profit="TARGET")
+if cur == "TR"
+    strategy.cancel("xL")
+    strategy.cancel("xS")
+    strategy.exit("tL", from_entry="Long", stop=stp, comment="STOP/TRAIL")
+    strategy.exit("tS", from_entry="Short", stop=stp, comment="STOP/TRAIL")
+if lastBar and strategy.position_size != 0
+    strategy.close_all(comment="FLAT 16:45 NY")
+
+// ---------------------------------------------------------------- drawing
+plot(showLv ? sVAH : na, "Session VA high", color=color.new(color.teal, 0), style=plot.style_linebr)
+plot(showLv ? sVAL : na, "Session VA low", color=color.new(color.red, 0), style=plot.style_linebr)
+plot(showLv ? vwap : na, "VWAP", color=color.new(color.yellow, 30))
+plot(showCv ? vaH : na, "Candle VA high", color=color.new(color.aqua, 40), style=plot.style_circles)
+plot(showCv ? vaL : na, "Candle VA low", color=color.new(color.fuchsia, 40), style=plot.style_circles)
+plot(strategy.position_size != 0 ? stp : na, "Stop", color=color.orange, style=plot.style_linebr)
+plot(strategy.position_size != 0 and cur == "MG" ? tgt : na, "Target", color=color.lime, style=plot.style_linebr)
+bgcolor(strategy.position_size > 0 ? color.new(color.green, 92) : strategy.position_size < 0 ? color.new(color.red, 92) : na)
+var table box = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
+if barstate.islast
+    table.cell(box, 0, 0, "Setup", text_color=color.gray)
+    table.cell(box, 1, 0, setup, text_color=color.white)
+    table.cell(box, 0, 1, "1-min data", text_color=color.gray)
+    table.cell(box, 1, 1, array.size(los) > 0 ? "OK (" + str.tostring(array.size(los)) + " per candle)" : "missing", text_color=array.size(los) > 0 ? color.lime : color.red)
+    table.cell(box, 0, 2, "Last delta / effort", text_color=color.gray)
+    table.cell(box, 1, 2, str.tostring(cdelta, "#") + " / " + str.tostring(effort, "#"), text_color=color.white)
+    table.cell(box, 0, 3, "Chart check", text_color=color.gray)
+    table.cell(box, 1, 3, timeframe.period == "15" ? "15-min OK" : "Switch to 15-MINUTE candles!", text_color=timeframe.period == "15" ? color.lime : color.red)

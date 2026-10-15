@@ -1,0 +1,77 @@
+//@version=5
+// STRATEGY CITY - Camarilla H4/L4 Breakout + NR4 Range Expansion (MNQ, 1-hour chart)
+// Same rules as the 2-year Strategy City test. Arrows = past buys/sells. Strategy Tester > List of trades.
+// Camarilla: 1h candle CLOSES above H4 = buy, below L4 = sell. NR4: last candle narrowest of 4, close beyond it.
+// Stop = 1.5 x ATR(14). Size = $ risk / (stop distance x $ per point). Flat before 16:45 New York. Daily loss limit.
+// A testing tool, not trading advice.
+strategy("Strategy City - Camarilla H4/L4 + NR4", shorttitle="SC Cam+NR4", overlay=true, initial_capital=50000, currency=currency.USD, process_orders_on_close=true, commission_type=strategy.commission.cash_per_contract, commission_value=1.25, default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0)
+setup = input.string("Camarilla H4/L4", "Setup", options=["Camarilla H4/L4", "NR4", "Both"])
+riskUSD = input.float(500, "Risk per trade ($)", minval=50, step=50)
+stopATR = input.float(1.5, "Stop = ATR(14) x", minval=0.1, step=0.1)
+maxQty = input.int(40, "Max contracts", minval=1)
+dayLoss = input.float(1500, "Daily loss limit ($)", minval=100, step=100)
+flatHr = input.int(16, "Flat by this New York hour", minval=1, maxval=17)
+fromDate = input.time(timestamp("2024-07-01T00:00:00"), "Show trades from")
+showLv = input.bool(true, "Show Camarilla H4 / L4 lines")
+showNR4 = input.bool(true, "Mark NR4 (narrowest of 4) candles")
+NY = "America/New_York"
+useCam = setup != "NR4"
+useNR = setup != "Camarilla H4/L4"
+// levels and indicators
+[pdh, pdl, pdc] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+rng = pdh - pdl
+h4 = pdc + 1.1 * rng / 2
+l4 = pdc - 1.1 * rng / 2
+atr = ta.atr(14)
+barRange = high - low
+isNR4 = barRange <= ta.lowest(barRange, 4)
+nr4Prev = isNR4[1]
+nyH = hour(time, NY)
+firstBar = nyH == 18
+flatNow = nyH == flatHr - 1
+noEntries = nyH >= flatHr - 1 and nyH < 18
+canTrade = time >= fromDate and not noEntries
+// signals: only when the condition is NEW
+camL = close > h4
+camS = close < l4
+nrL = nr4Prev and close > high[1]
+nrS = nr4Prev and close < low[1]
+camLong = useCam and camL and (not camL[1] or firstBar)
+camShort = useCam and camS and (not camS[1] or firstBar)
+nrLong = useNR and nrL and not nrL[1] and not firstBar
+nrShort = useNR and nrS and not nrS[1] and not firstBar
+goLong = canTrade and (camLong or nrLong) and not (camShort or nrShort)
+goShort = canTrade and (camShort or nrShort) and not (camLong or nrLong)
+// size: fixed $ risk (0 = stop too wide for this risk, no trade)
+stopDist = stopATR * atr
+qty = math.min(maxQty, math.round(riskUSD / (stopDist * syminfo.pointvalue)))
+goL = goLong and strategy.position_size <= 0 and qty >= 1
+goS = goShort and strategy.position_size >= 0 and qty >= 1
+// orders (alerts: create an alert on this strategy with "Order fills")
+strategy.risk.max_intraday_loss(dayLoss, strategy.cash)
+var float stopPx = na
+stopPx := goL ? close - stopDist : goS ? close + stopDist : stopPx
+strategy.entry("Long", strategy.long, qty=qty, comment=(camLong ? "Cam H4" : "NR4") + " BUY " + str.tostring(qty), when=goL)
+strategy.entry("Short", strategy.short, qty=qty, comment=(camShort ? "Cam L4" : "NR4") + " SELL " + str.tostring(qty), when=goS)
+strategy.exit("Stop L", from_entry="Long", stop=stopPx, comment="STOP")
+strategy.exit("Stop S", from_entry="Short", stop=stopPx, comment="STOP")
+strategy.close_all(when=flatNow and strategy.position_size != 0, comment="FLAT " + str.tostring(flatHr) + ":00 NY")
+// drawing
+plot(showLv and useCam ? h4 : na, "Camarilla H4", color=color.teal, style=plot.style_stepline, linewidth=2)
+plot(showLv and useCam ? l4 : na, "Camarilla L4", color=color.red, style=plot.style_stepline, linewidth=2)
+plot(strategy.position_size != 0 ? stopPx : na, "Stop", color=color.orange, style=plot.style_linebr, linewidth=1)
+plotshape(showNR4 and useNR and isNR4, "NR4 candle", shape.diamond, location.abovebar, color.new(color.yellow, 20), size=size.tiny)
+bgcolor(strategy.position_size > 0 ? color.new(color.green, 92) : strategy.position_size < 0 ? color.new(color.red, 92) : na)
+bgcolor(noEntries ? color.new(color.gray, 94) : na, title="No-trade hours")
+// info box (top right)
+var table box = table.new(position.top_right, 2, 5, bgcolor=color.new(color.black, 20), border_width=1)
+table.cell(box, 0, 0, "Setup", text_color=color.gray)
+table.cell(box, 1, 0, setup, text_color=color.white)
+table.cell(box, 0, 1, "H4 / L4", text_color=color.gray)
+table.cell(box, 1, 1, str.tostring(h4, format.mintick) + " / " + str.tostring(l4, format.mintick), text_color=color.white)
+table.cell(box, 0, 2, "Stop distance", text_color=color.gray)
+table.cell(box, 1, 2, str.tostring(stopDist, "#.##") + " pts = $" + str.tostring(stopDist * syminfo.pointvalue, "#") + " per contract", text_color=color.white)
+table.cell(box, 0, 3, "Size for $" + str.tostring(riskUSD, "#"), text_color=color.gray)
+table.cell(box, 1, 3, qty >= 1 ? str.tostring(qty) + " contracts" : "stop too wide: no trade", text_color=qty >= 1 ? color.lime : color.orange)
+table.cell(box, 0, 4, "Chart check", text_color=color.gray)
+table.cell(box, 1, 4, timeframe.period == "60" ? "1-hour OK" : "Switch to 1-HOUR candles!", text_color=timeframe.period == "60" ? color.lime : color.red)
